@@ -1,0 +1,6 @@
+{
+  "name": "THAISAR Thai Language School",
+  "description": "Mobile web app for THAISAR Thai Language School featuring courses, bookstore, learning resources, and document management with strict design consistency.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

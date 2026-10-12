@@ -1,0 +1,17 @@
+{
+  "name": "THAISAR — Mobile Shop & Document Management",
+  "short_name": "THAISAR",
+  "description": "Mobile web app for THAISAR Thai Language School featuring courses, bookstore, learning resources, and document management with strict design consistency.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fdfdff",
+  "theme_color": "#6336d4",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
