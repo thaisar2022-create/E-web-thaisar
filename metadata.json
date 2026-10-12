@@ -2,5 +2,7 @@
   "name": "THAISAR — Thai Language School & Learning Hub",
   "description": "Learn Thai with THAISAR Thai Language School. Explore beginner TMM speaking classes, 4-skills TLS courses, textbooks, and student document management.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

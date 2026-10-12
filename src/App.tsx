@@ -524,7 +524,13 @@ export default function App() {
           }}
           aria-label="THAISAR Home"
         >
-          <span className="brand-icon">ท</span>
+          <span className="brand-icon" style={{ overflow: 'hidden', padding: 0 }}>
+            <img
+              src="https://lh3.googleusercontent.com/pw/AP1GczMFMASbiKtCOQX2oLMQ0r80AUQBTISjeYJp1r6goIb7YGa7a0p6MiZ2inIVYpUd5QNkDEDtT-zq5sikNOeXaZ9lR-XooKbjkKHQTXARimeevLOitPs=w2400"
+              alt="THAISAR Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '13px' }}
+            />
+          </span>
           <span className="brand-text">
             <strong>THAISAR</strong>
             <small>THAI LANGUAGE SCHOOL</small>
@@ -552,33 +558,6 @@ export default function App() {
               THB
             </button>
           </div>
-
-          {/* Quick Documents shortcut button */}
-          <button
-            type="button"
-            className="round"
-            onClick={() => setPage('documents')}
-            aria-label="Document Management"
-            title="စာရွက်စာတမ်း စီမံခန့်ခွဲမှု"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-              <polyline points="10 9 9 9 8 9" />
-            </svg>
-            <span className="round-badge">{persist.documents.length}</span>
-          </button>
 
           {/* Orders button */}
           <button
@@ -696,48 +675,9 @@ export default function App() {
               ))}
             </div>
 
-            {/* Document Management Showcase Banner */}
-            <div
-              className="banner"
-              style={{
-                background: 'linear-gradient(110deg, #f1ebff, #e5dbff)',
-                borderColor: '#ded2fa',
-                cursor: 'pointer',
-              }}
-              onClick={() => setPage('documents')}
-            >
-              <span className="banner-icon">📂</span>
-              <div>
-                <b>ကျောင်းသား စာရွက်စာတမ်းနှင့် သင်ရိုးများ စီမံခန့်ခွဲမှု</b>
-                <p style={{ color: '#4d299c' }}>
-                  သင်ရိုးညွှန်းတမ်း PDF၊ Worksheets၊ ငွေလွှဲပြေစာများနှင့် လက်မှတ်များကို တစ်နေရာတည်းတွင်
-                  စီမံခန့်ခွဲနိုင်ပါတယ်။ ({persist.documents.length} ဖိုင် ရရှိနိုင်)
-                </p>
-              </div>
-              <button className="buy-sm" type="button" onClick={() => setPage('documents')}>
-                ကြည့်ရှုရန်
-              </button>
-            </div>
 
-            {/* Member Rewards Banner */}
-            <div className="banner">
-              <span className="banner-icon">💎</span>
-              <div>
-                <b>THAISAR Member Rewards</b>
-                <p>သင်တန်းတက်၊ စာအုပ်ဝယ်ပြီး Member Level တိုးနိုင်ပါတယ်။</p>
-              </div>
-              <button className="buy-sm" type="button" onClick={() => setPage('account')}>
-                View
-              </button>
-            </div>
 
-            {/* Books section */}
-            <div className="section">
-              <h2>📚 စာအုပ်များ</h2>
-              <button className="see" type="button" onClick={() => setPage('books')}>
-                အားလုံးကြည့်ရန် →
-              </button>
-            </div>
+
 
             <div className="book-list">
               {books.map((b) => (
@@ -965,61 +905,7 @@ export default function App() {
               ရှင်းပြသင်ကြားပေးပါတယ်။
             </div>
 
-            {/* Quick Course Documents section */}
-            <div className="section">
-              <h2>📂 TMM သင်ရိုးဖိုင်များနှင့် စာရွက်စာတမ်းများ</h2>
-              <button
-                className="see"
-                type="button"
-                onClick={() => {
-                  setDocCategory('course_materials');
-                  setPage('documents');
-                }}
-              >
-                အားလုံးကြည့်ရန် →
-              </button>
-            </div>
-            <div className="doc-card">
-              <div className="doc-top">
-                <div className="doc-icon-box pdf">PDF</div>
-                <div className="doc-info">
-                  <div className="doc-title">TMM ထိုင်းစကားပြော အခြေခံ သင်ရိုးညွှန်းတမ်း</div>
-                  <div className="doc-meta-row">
-                    <span>Level 1 + 2</span>
-                    <span className="doc-meta-dot">•</span>
-                    <span>2.4 MB</span>
-                    <span className="doc-meta-dot">•</span>
-                    <span>14 မျက်နှာ</span>
-                  </div>
-                </div>
-              </div>
-              <div className="doc-actions-row">
-                <button
-                  type="button"
-                  className="buy-sm"
-                  onClick={() => {
-                    const doc = persist.documents.find((d) => d.id === 'DOC-TMM-01');
-                    if (doc) {
-                      setPreviewDoc(doc);
-                      setActiveSheet('docPreview');
-                    }
-                  }}
-                >
-                  အစမ်းဖတ်ရှုမည်
-                </button>
-                <button
-                  type="button"
-                  className="buy-sm"
-                  style={{ background: '#eaf6ec', color: '#137333' }}
-                  onClick={() => {
-                    const doc = persist.documents.find((d) => d.id === 'DOC-TMM-01');
-                    if (doc) handleDownloadDoc(doc);
-                  }}
-                >
-                  ဒေါင်းလုဒ်ရယူရန်
-                </button>
-              </div>
-            </div>
+
 
             <div className="section">
               <h2>သင်တန်းအမျိုးအစားနှင့် ဈေးနှုန်း</h2>
@@ -1171,61 +1057,7 @@ export default function App() {
               သင်ကြားပေးပါတယ်။
             </div>
 
-            {/* TLS Course Documents preview */}
-            <div className="section">
-              <h2>📂 TLS လေ့ကျင့်ခန်း စာရွက်စာတမ်းများ</h2>
-              <button
-                className="see"
-                type="button"
-                onClick={() => {
-                  setDocCategory('worksheets');
-                  setPage('documents');
-                }}
-              >
-                အားလုံးကြည့်ရန် →
-              </button>
-            </div>
-            <div className="doc-card">
-              <div className="doc-top">
-                <div className="doc-icon-box pdf">PDF</div>
-                <div className="doc-info">
-                  <div className="doc-title">TLS ထိုင်းစာ 4 Skills & Grammar လေ့ကျင့်ခန်းစာရွက်</div>
-                  <div className="doc-meta-row">
-                    <span>အိမ်စာနှင့် Worksheet</span>
-                    <span className="doc-meta-dot">•</span>
-                    <span>1.8 MB</span>
-                    <span className="doc-meta-dot">•</span>
-                    <span>18 မျက်နှာ</span>
-                  </div>
-                </div>
-              </div>
-              <div className="doc-actions-row">
-                <button
-                  type="button"
-                  className="buy-sm"
-                  onClick={() => {
-                    const doc = persist.documents.find((d) => d.id === 'DOC-TLS-02');
-                    if (doc) {
-                      setPreviewDoc(doc);
-                      setActiveSheet('docPreview');
-                    }
-                  }}
-                >
-                  အစမ်းဖတ်ရှုမည်
-                </button>
-                <button
-                  type="button"
-                  className="buy-sm"
-                  style={{ background: '#eaf6ec', color: '#137333' }}
-                  onClick={() => {
-                    const doc = persist.documents.find((d) => d.id === 'DOC-TLS-02');
-                    if (doc) handleDownloadDoc(doc);
-                  }}
-                >
-                  ဒေါင်းလုဒ်ရယူရန်
-                </button>
-              </div>
-            </div>
+
 
             <div className="section">
               <h2>သင်တန်းပုံစံနှင့် ဈေးနှုန်း</h2>
