@@ -1,20 +1,78 @@
 <!doctype html>
-<html lang="my">
+<html lang="my" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#5b32cb" />
-    <title>THAISAR Thai Language School</title>
-    <meta name="description" content="Mobile web app for THAISAR Thai Language School featuring courses, bookstore, learning resources, and document management with strict design consistency." />
-    <meta property="og:title" content="THAISAR Thai Language School" />
-    <meta property="og:description" content="Mobile web app for THAISAR Thai Language School featuring courses, bookstore, learning resources, and document management with strict design consistency." />
+    <title>THAISAR — Thai Language School &amp; Learning Hub</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Learn Thai with THAISAR Thai Language School. Explore beginner TMM speaking classes, 4-skills TLS courses, textbooks, and student document management." />
+    <meta name="keywords" content="THAISAR, Thai Language School, Learn Thai, TMM Speaking, TLS 4 Skills, Thai Language Books, Myanmar Thai Course, Thai Grammar, Thai Vocabulary, စာရွက်စာတမ်း စီမံခန့်ခွဲမှု, ထိုင်းစကားပြောသင်တန်း" />
+    <meta name="author" content="THAISAR Thai Language School" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+
+
+    <!-- Open Graph Social Cards -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="THAISAR Thai Language School" />
+    <meta property="og:title" content="THAISAR — Thai Language School &amp; Learning Hub" />
+    <meta property="og:description" content="Learn Thai with THAISAR Thai Language School. Explore beginner TMM speaking classes, 4-skills TLS courses, textbooks, and student document management." />
+    <meta property="og:url" content="/" />
+    <meta property="og:image" content="/icon.svg" />
+    <meta property="og:image:type" content="image/svg+xml" />
+    <meta property="og:image:alt" content="THAISAR Thai Language School Logo" />
+    <meta property="og:locale" content="my_MM" />
+    <meta property="og:locale:alternate" content="en_US" />
+
+    <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <meta name="twitter:title" content="THAISAR — Thai Language School &amp; Learning Hub" />
+    <meta name="twitter:description" content="Learn Thai with THAISAR Thai Language School. Explore beginner TMM speaking classes, 4-skills TLS courses, textbooks, and student document management." />
+    <meta name="twitter:image" content="/icon.svg" />
+    <meta name="twitter:image:alt" content="THAISAR Thai Language School Logo" />
+
+    <!-- PWA & Mobile Web Capabilities -->
+    <meta name="theme-color" content="#6336d4" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#3b218e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="THAISAR" />
+    <meta name="application-name" content="THAISAR" />
+    <meta name="format-detection" content="telephone=no" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+
+    <!-- Preconnect & Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700;800;900&family=Padauk:wght@400;700&display=swap" rel="stylesheet" />
+
+    <!-- Schema.org JSON-LD Structured Data for Lighthouse SEO -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "EducationalOrganization",
+          "@id": "/#organization",
+          "name": "THAISAR Thai Language School",
+          "url": "/",
+          "logo": "/icon.svg",
+          "description": "Thai language school offering beginner TMM speaking, TLS 4-skills courses, practical textbooks, and document management.",
+          "sameAs": []
+        },
+        {
+          "@type": "WebApplication",
+          "name": "THAISAR",
+          "applicationCategory": "EducationalApplication",
+          "operatingSystem": "All",
+          "browserRequirements": "Requires JavaScript. Requires HTML5."
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

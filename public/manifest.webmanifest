@@ -1,17 +1,27 @@
 {
-  "name": "THAISAR — Mobile Shop & Document Management",
+  "id": "/",
+  "name": "THAISAR Thai Language School",
   "short_name": "THAISAR",
-  "description": "Mobile web app for THAISAR Thai Language School featuring courses, bookstore, learning resources, and document management with strict design consistency.",
-  "start_url": "./",
+  "description": "Learn Thai with THAISAR Thai Language School. Explore beginner TMM speaking classes, 4-skills TLS courses, textbooks, and student document management.",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#fdfdff",
   "theme_color": "#6336d4",
+  "categories": ["education", "books", "productivity"],
   "icons": [
     {
       "src": "/icon.svg",
-      "sizes": "any",
+      "sizes": "192x192 512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }
