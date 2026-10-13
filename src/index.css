@@ -1647,6 +1647,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: 11px;
 }
 
+.enroll-box {
+  scroll-margin-top: 75px;
+}
+
 .enroll-intro {
   padding: 13px;
   border: 1px solid #e3d8ff;

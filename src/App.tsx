@@ -23,6 +23,7 @@ import {
   tmmBenefits,
   tlsChapters,
   tlsFundamentals,
+  schoolGuarantee,
   phrases,
   styleNames,
   tiers,
@@ -236,6 +237,19 @@ export default function App() {
     setReceiptFile(null);
     setReceiptName('');
     setActiveSheet('enroll');
+  };
+
+  // Navigate to course with auto-scroll to enrollment box
+  const navigateToCourse = (courseId: 'speaking' | 'skills') => {
+    setPage(courseId === 'speaking' ? 'tmm' : 'tls');
+    setTimeout(() => {
+      const el = document.getElementById('enrollment-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 60);
   };
 
   // Open Checkout for Book
@@ -599,7 +613,7 @@ export default function App() {
               <button
                 className="hero-btn"
                 type="button"
-                onClick={() => setPage('tmm')}
+                onClick={() => navigateToCourse('speaking')}
               >
                 TMM သင်တန်းကြည့်ရန် ↗
               </button>
@@ -665,7 +679,7 @@ export default function App() {
                       <button
                         type="button"
                         className="buy-sm"
-                        onClick={() => setPage(c.id === 'speaking' ? 'tmm' : 'tls')}
+                        onClick={() => navigateToCourse(c.id)}
                       >
                         အသေးစိတ် →
                       </button>
@@ -817,7 +831,7 @@ export default function App() {
                       <button
                         className="main-btn"
                         type="button"
-                        onClick={() => setPage(c.id === 'speaking' ? 'tmm' : 'tls')}
+                        onClick={() => navigateToCourse(c.id)}
                       >
                         သင်တန်းရွေးရန် →
                       </button>
@@ -842,6 +856,71 @@ export default function App() {
               <p className="subtitle">Thai Speaking Only · Beginner · Level 1 + 2 တွဲလျက်</p>
             </div>
 
+            {/* ENROLLMENT & REGISTRATION BOX (AT THE VERY TOP) */}
+            <div id="enrollment-section" className="enroll-box">
+              <div className="section" style={{ marginTop: '8px' }}>
+                <h2>📝 သင်တန်းအပ်နှံရန် (Registration)</h2>
+                <span className="pill orange">4 Class Styles</span>
+              </div>
+              <p className="subtitle" style={{ marginBottom: '12px' }}>
+                Zoom / ရန်ကုန် / မန္တလေး / Video အတန်းများထဲမှ မိမိတက်ရောက်လိုသောပုံစံကို ရွေးချယ်ပြီး အပ်နှံနိုင်ပါတယ်။ (Level 1 + 2 တွဲလျက်)
+              </p>
+
+              <div className="tmm-pricing">
+                {(
+                  [
+                    ['zoom', 'Zoom TMM', '📹', '၂၀ ရက်'],
+                    ['yangon', 'ရန်ကုန် TMM', '📍', '၂၀ ရက်'],
+                    ['mandalay', 'မန္တလေး TMM', '🏫', '၂၀ ရက်'],
+                    ['video', 'Video TMM', '▶', 'ကြာချိန် မသတ်မှတ်ရသေး'],
+                  ] as const
+                ).map(([sty, title, emoji, duration]) => {
+                  const c = courses[0];
+                  return (
+                    <article key={sty} className="tmm-price-card">
+                      <div className="class-photo no-photo" data-style-photo={sty}>
+                        <div className="class-photo-placeholder" aria-hidden="true">
+                          <span className="placeholder-symbol">{emoji}</span>
+                          <strong>{title} ပုံထည့်ရန်</strong>
+                          <small>1200 × 675 px</small>
+                        </div>
+                      </div>
+                      <div className="tmm-price-head">
+                        <span className="style-emoji">{emoji}</span>
+                        <div>
+                          <strong>{title}</strong>
+                          <small>{duration} · Level 1 + 2 တွဲလျက်</small>
+                        </div>
+                      </div>
+                      <div className="tmm-price-lines">
+                        <span className="regular">{mmk(c.prices[sty][0])}</span>
+                        <span className="promo">{mmk(c.promo[sty])}</span>
+                      </div>
+                      <div className="tmm-price-footer">
+                        <span className="pill orange">
+                          {sty === 'video' ? 'Promotion Price' : 'Early Bird Price'}
+                        </span>
+                        <button
+                          type="button"
+                          className="buy-sm"
+                          onClick={() => handleOpenTmmCheckout(sty)}
+                        >
+                          သင်တန်းအပ်နှံရန် →
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="notice" style={{ marginTop: '14px', marginBottom: '18px' }}>
+                ✓ TMM ရဲ့ Zoom၊ ရန်ကုန်၊ မန္တလေးနဲ့ Video Class အားလုံးမှာ{' '}
+                <strong>Level 1 + Level 2 နှစ်ခုလုံး တွဲလျက် ပါဝင်ပါတယ်။</strong> Promotion ကာလနဲ့ THB
+                ဈေးနှုန်းကို ကျောင်းဘက်မှ အတည်ပြုရန် လိုအပ်ပါတယ်။
+              </div>
+            </div>
+
+            {/* COURSE DETAILS & CURRICULUM */}
             <section className="tmm-intro">
               <span className="pill" style={{ background: '#ffffff2a', color: '#fff' }}>
                 ထိုင်းစာလုံး မသင်ရ
@@ -905,69 +984,6 @@ export default function App() {
               ရှင်းပြသင်ကြားပေးပါတယ်။
             </div>
 
-
-
-            <div className="section">
-              <h2>သင်တန်းအမျိုးအစားနှင့် ဈေးနှုန်း</h2>
-            </div>
-            <p className="subtitle">
-              MMK ဈေးနှုန်းများ · Promotion စတင်/ပြီးဆုံးရက် မသတ်မှတ်ရသေးပါ။ Promotion ရရှိမှုကို
-              ကျောင်းဘက်မှ အတည်ပြုရန်လိုပါတယ်။
-            </p>
-
-            <div className="tmm-pricing">
-              {(
-                [
-                  ['zoom', 'Zoom TMM', '📹', '၂၀ ရက်'],
-                  ['yangon', 'ရန်ကုန် TMM', '📍', '၂၀ ရက်'],
-                  ['mandalay', 'မန္တလေး TMM', '🏫', '၂၀ ရက်'],
-                  ['video', 'Video TMM', '▶', 'ကြာချိန် မသတ်မှတ်ရသေး'],
-                ] as const
-              ).map(([sty, title, emoji, duration]) => {
-                const c = courses[0];
-                return (
-                  <article key={sty} className="tmm-price-card">
-                    <div className="class-photo no-photo" data-style-photo={sty}>
-                      <div className="class-photo-placeholder" aria-hidden="true">
-                        <span className="placeholder-symbol">{emoji}</span>
-                        <strong>{title} ပုံထည့်ရန်</strong>
-                        <small>1200 × 675 px</small>
-                      </div>
-                    </div>
-                    <div className="tmm-price-head">
-                      <span className="style-emoji">{emoji}</span>
-                      <div>
-                        <strong>{title}</strong>
-                        <small>{duration} · Level 1 + 2 တွဲလျက်</small>
-                      </div>
-                    </div>
-                    <div className="tmm-price-lines">
-                      <span className="regular">{mmk(c.prices[sty][0])}</span>
-                      <span className="promo">{mmk(c.promo[sty])}</span>
-                    </div>
-                    <div className="tmm-price-footer">
-                      <span className="pill orange">
-                        {sty === 'video' ? 'Promotion Price' : 'Early Bird Price'}
-                      </span>
-                      <button
-                        type="button"
-                        className="buy-sm"
-                        onClick={() => handleOpenTmmCheckout(sty)}
-                      >
-                        သင်တန်းအပ်နှံရန် →
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-
-            <div className="notice" style={{ marginTop: '15px' }}>
-              ✓ TMM ရဲ့ Zoom၊ ရန်ကုန်၊ မန္တလေးနဲ့ Video Class အားလုံးမှာ{' '}
-              <strong>Level 1 + Level 2 နှစ်ခုလုံး တွဲလျက် ပါဝင်ပါတယ်။</strong> Promotion ကာလနဲ့ THB
-              ဈေးနှုန်းကို ကျောင်းဘက်မှ အတည်ပြုရန် လိုအပ်ပါတယ်။
-            </div>
-
             <div className="section">
               <h2>ဘယ်သူတွေအတွက် သင့်တော်သလဲ?</h2>
             </div>
@@ -977,6 +993,28 @@ export default function App() {
                 <b>အလွယ်ကူဆုံး၊ အရိုးရှင်းဆုံးနည်းနဲ့ မြန်မြန်ဆန်ဆန် နားလည်ပြောဆိုချင်တဲ့ Beginner</b>{' '}
                 တွေအတွက် ရည်ရွယ်ပါတယ်။
               </p>
+            </div>
+
+            <div className="section">
+              <h2>ကျောင်း၏ အာမခံချက်</h2>
+            </div>
+            <section className="tls-guarantee">
+              <div className="tls-guarantee-title">{schoolGuarantee.title}</div>
+              <ol>
+                {schoolGuarantee.rules.map((rule, idx) => (
+                  <li key={idx}>
+                    <strong>{rule.title}</strong> — {rule.desc}
+                  </li>
+                ))}
+              </ol>
+              <p>
+                အထက်ပါ (၃) ချက်လုံး ပြည့်မီပြီးမှ သတ်မှတ်ထားတဲ့ Level အလိုက် ပြော/ရေးတတ်မြောက်မှု
+                မရရှိခဲ့ပါက <strong>သင်တန်းကြေး အပြည့်ပြန်အမ်းမည်</strong> ဟု ကျောင်းက အာမခံဖော်ပြထားပါတယ်။
+              </p>
+            </section>
+
+            <div className="notice" style={{ marginTop: '13px' }}>
+              🛈 {schoolGuarantee.disclaimer}
             </div>
 
             <p className="smallprint">
@@ -1000,6 +1038,73 @@ export default function App() {
               <p className="subtitle">အရေး၊ အဖတ်၊ အပြော၊ နားထောင် (4 Skills) + Grammar</p>
             </div>
 
+            {/* ENROLLMENT & REGISTRATION BOX (AT THE VERY TOP) */}
+            <div id="enrollment-section" className="enroll-box">
+              <div className="section" style={{ marginTop: '8px' }}>
+                <h2>📝 သင်တန်းအပ်နှံရန် (Registration)</h2>
+                <span className="pill orange">4 Class Styles</span>
+              </div>
+              <p className="subtitle" style={{ marginBottom: '12px' }}>
+                Zoom၊ ရန်ကုန်၊ မန္တလေး = Level 1 + 2 တွဲလျက် (ရက် ၅၀)။ Video TLS = Level 1 / Level 2 ကို သီးခြားရွေးနိုင်ပါတယ်။
+              </p>
+
+              <div className="tmm-pricing">
+                {(
+                  [
+                    ['zoom', 'Zoom TLS', '📹', '၅၀ ရက်'],
+                    ['yangon', 'ရန်ကုန် TLS', '📍', '၅၀ ရက်'],
+                    ['mandalay', 'မန္တလေး TLS', '🏫', '၅၀ ရက်'],
+                    ['video', 'Video TLS', '▶', 'ကြာချိန် မသတ်မှတ်ရသေး'],
+                  ] as const
+                ).map(([sty, name, emoji, duration]) => {
+                  const c = courses[1];
+                  return (
+                    <article key={sty} className="tmm-price-card">
+                      <div className="class-photo no-photo" data-style-photo={sty}>
+                        <div className="class-photo-placeholder" aria-hidden="true">
+                          <span className="placeholder-symbol">{emoji}</span>
+                          <strong>{name} ပုံထည့်ရန်</strong>
+                          <small>1200 × 675 px</small>
+                        </div>
+                      </div>
+                      <div className="tmm-price-head">
+                        <span className="style-emoji">{emoji}</span>
+                        <div>
+                          <strong>{name}</strong>
+                          <small>
+                            {duration} · {sty === 'video' ? 'Level 1 / Level 2 သီးသန့်' : 'Level 1 + 2 တွဲလျက်'}
+                          </small>
+                        </div>
+                      </div>
+                      <div className="tmm-price-lines">
+                        <span className="regular">{mmk(c.prices[sty][0])}</span>
+                        <span className="promo">{mmk(c.promo[sty])}</span>
+                      </div>
+                      <div className="tmm-price-footer">
+                        <span className="pill orange">
+                          {sty === 'video' ? 'Promotion' : 'Early Bird'} Price
+                        </span>
+                        <button
+                          type="button"
+                          className="buy-sm"
+                          onClick={() => handleOpenTlsCheckout(sty)}
+                        >
+                          သင်တန်းအပ်နှံရန် →
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="notice" style={{ marginTop: '14px', marginBottom: '18px' }}>
+                🛈 Video TLS အတွက် ဖော်ပြထားသော ၂၀၀,၀၀၀ / ၁၀၀,၀၀၀ ကျပ်သည် Level 1 နှင့် Level 2
+                တစ်ခုချင်းစီ၏ဈေးနှုန်းဟုတ်/မဟုတ်ကို အတည်မပြုရသေးပါ။ Checkout တွင် Demo ဈေးအဖြစ်သာ
+                ပြထားပါတယ်။
+              </div>
+            </div>
+
+            {/* COURSE DETAILS & CURRICULUM */}
             <div className="tmm-note" style={{ margin: '0 0 13px' }}>
               📌 <strong>Live Class:</strong> Level 1+2 တွဲလျက် · <strong>Video TLS:</strong> Level 1
               သို့မဟုတ် Level 2 သီးသန့် ရွေးနိုင်ပါတယ်။
@@ -1057,87 +1162,17 @@ export default function App() {
               သင်ကြားပေးပါတယ်။
             </div>
 
-
-
-            <div className="section">
-              <h2>သင်တန်းပုံစံနှင့် ဈေးနှုန်း</h2>
-            </div>
-            <p className="subtitle">
-              Zoom၊ ရန်ကုန်၊ မန္တလေး = Level 1 + 2 တွဲလျက် (ရက် ၅၀)။ Video TLS = Level 1 / Level 2 ကို
-              သီးခြားရွေးနိုင်ပါတယ်။
-            </p>
-
-            <div className="tmm-pricing">
-              {(
-                [
-                  ['zoom', 'Zoom TLS', '📹', '၅၀ ရက်'],
-                  ['yangon', 'ရန်ကုန် TLS', '📍', '၅၀ ရက်'],
-                  ['mandalay', 'မန္တလေး TLS', '🏫', '၅၀ ရက်'],
-                  ['video', 'Video TLS', '▶', 'ကြာချိန် မသတ်မှတ်ရသေး'],
-                ] as const
-              ).map(([sty, name, emoji, duration]) => {
-                const c = courses[1];
-                return (
-                  <article key={sty} className="tmm-price-card">
-                    <div className="class-photo no-photo" data-style-photo={sty}>
-                      <div className="class-photo-placeholder" aria-hidden="true">
-                        <span className="placeholder-symbol">{emoji}</span>
-                        <strong>{name} ပုံထည့်ရန်</strong>
-                        <small>1200 × 675 px</small>
-                      </div>
-                    </div>
-                    <div className="tmm-price-head">
-                      <span className="style-emoji">{emoji}</span>
-                      <div>
-                        <strong>{name}</strong>
-                        <small>
-                          {duration} · {sty === 'video' ? 'Level 1 / Level 2 သီးသန့်' : 'Level 1 + 2 တွဲလျက်'}
-                        </small>
-                      </div>
-                    </div>
-                    <div className="tmm-price-lines">
-                      <span className="regular">{mmk(c.prices[sty][0])}</span>
-                      <span className="promo">{mmk(c.promo[sty])}</span>
-                    </div>
-                    <div className="tmm-price-footer">
-                      <span className="pill orange">
-                        {sty === 'video' ? 'Promotion' : 'Early Bird'} Price
-                      </span>
-                      <button
-                        type="button"
-                        className="buy-sm"
-                        onClick={() => handleOpenTlsCheckout(sty)}
-                      >
-                        သင်တန်းအပ်နှံရန် →
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-
-            <div className="notice" style={{ marginTop: '13px' }}>
-              🛈 Video TLS အတွက် ဖော်ပြထားသော ၂၀၀,၀၀၀ / ၁၀၀,၀၀၀ ကျပ်သည် Level 1 နှင့် Level 2
-              တစ်ခုချင်းစီ၏ဈေးနှုန်းဟုတ်/မဟုတ်ကို အတည်မပြုရသေးပါ။ Checkout တွင် Demo ဈေးအဖြစ်သာ
-              ပြထားပါတယ်။
-            </div>
-
             <div className="section">
               <h2>ကျောင်း၏ အာမခံချက်</h2>
             </div>
             <section className="tls-guarantee">
-              <div className="tls-guarantee-title">🛡️ အာမခံချက်အတွက် ကျောင်းသားဘက်မှ လိုက်နာရန် (၃) ချက်</div>
+              <div className="tls-guarantee-title">{schoolGuarantee.title}</div>
               <ol>
-                <li>
-                  <strong>အတန်းချိန်အပြည့် တက်ရောက်ခြင်း</strong> — အတန်းလုံးဝ မပျက်ကွက်ရပါ။
-                </li>
-                <li>
-                  <strong>အတန်းတွင်း ပါဝင်လေ့ကျင့်ခြင်း</strong> — စကားပြောခြင်း၊
-                  သင်ခန်းစာဆွေးနွေးခြင်းတို့မှာ ပါဝင်ရပါမယ်။
-                </li>
-                <li>
-                  <strong>အိမ်စာနှင့် Worksheet</strong> — သတ်မှတ်ချိန်အတွင်း အပြည့်အစုံ ပေးပို့ရပါမယ်။
-                </li>
+                {schoolGuarantee.rules.map((rule, idx) => (
+                  <li key={idx}>
+                    <strong>{rule.title}</strong> — {rule.desc}
+                  </li>
+                ))}
               </ol>
               <p>
                 အထက်ပါ (၃) ချက်လုံး ပြည့်မီပြီးမှ သတ်မှတ်ထားတဲ့ Level အလိုက် ပြော/ရေးတတ်မြောက်မှု
@@ -1146,10 +1181,7 @@ export default function App() {
             </section>
 
             <div className="notice" style={{ marginTop: '13px' }}>
-              🛈 သတိပြုရန် — ဒီအာမခံချက်က Certificate အတွက် Attendance 80% စည်းမျဉ်းနဲ့ မတူပါ။
-              အာမခံချက်ရဖို့ အတန်းမပျက်ကွက်ခြင်း (100%) လိုအပ်တယ်လို့ ကျောင်းက သတ်မှတ်ထားပါတယ်။
-              တတ်မြောက်မှုစစ်ဆေးနည်း၊ တောင်းခံနိုင်မယ့်ကာလ၊ Video Class အကျုံးဝင်မှုနဲ့ Refund
-              လုပ်ငန်းစဉ်ကို Live မတင်မီ ကျောင်းဘက်မှ အတည်ပြုရပါမယ်။
+              🛈 {schoolGuarantee.disclaimer}
             </div>
 
             <p className="smallprint">
