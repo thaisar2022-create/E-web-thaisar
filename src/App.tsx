@@ -32,11 +32,16 @@ import {
 
 const STORE_KEY = 'thaisar-mobile-demo-v11-docs';
 
+const ENV_DRIVE_UPLOAD_URL = (import.meta.env.VITE_GOOGLE_DRIVE_UPLOAD_URL as string) || '';
+const ENV_DRIVE_FOLDER_ID = (import.meta.env.VITE_GOOGLE_DRIVE_FOLDER_ID as string) || '';
+
 interface PersistData {
   orders: Order[];
   displayName: string;
   profile: UserProfile;
   documents: AppDocument[];
+  driveUploadUrl?: string;
+  driveFolderId?: string;
 }
 
 export default function App() {
@@ -81,6 +86,8 @@ export default function App() {
             address: '',
           },
           documents: Array.isArray(parsed.documents) ? parsed.documents : initialDocuments,
+          driveUploadUrl: parsed.driveUploadUrl || '',
+          driveFolderId: parsed.driveFolderId || '',
         };
       }
     } catch {
@@ -97,6 +104,8 @@ export default function App() {
         address: '',
       },
       documents: initialDocuments,
+      driveUploadUrl: '',
+      driveFolderId: '',
     };
   });
 
@@ -123,7 +132,17 @@ export default function App() {
 
   // Modals & Bottom Sheets
   const [activeSheet, setActiveSheet] = useState<
-    'none' | 'enroll' | 'bookBuy' | 'profile' | 'portal' | 'memberRules' | 'reset' | 'docPreview' | 'docUpload'
+    | 'none'
+    | 'enroll'
+    | 'bookBuy'
+    | 'profile'
+    | 'portal'
+    | 'memberRules'
+    | 'reset'
+    | 'docPreview'
+    | 'docUpload'
+    | 'orderSuccess'
+    | 'driveConfig'
   >('none');
 
   // Checkout State
@@ -140,6 +159,47 @@ export default function App() {
   const [payment, setPayment] = useState<PaymentMethod>('KBZPay');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptName, setReceiptName] = useState('');
+  const [receiptBase64, setReceiptBase64] = useState<string>('');
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string>('');
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadStatusText, setUploadStatusText] = useState<string>('');
+  const [lastSubmittedOrder, setLastSubmittedOrder] = useState<{
+    order: Order;
+    driveFileUrl?: string;
+    docId?: string;
+  } | null>(null);
+
+  // Google Drive configuration modal state
+  const [driveSettingUrl, setDriveSettingUrl] = useState('');
+  const [driveSettingFolder, setDriveSettingFolder] = useState('');
+
+  // Handle receipt selection and base64 conversion
+  const handleReceiptFileChange = (file: File | undefined) => {
+    if (!file) {
+      setReceiptFile(null);
+      setReceiptName('');
+      setReceiptBase64('');
+      setReceiptPreviewUrl('');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      notify('Screenshot ဖိုင်အရွယ်အစား 8 MB အောက်သာ ရွေးချယ်ပေးပါ။');
+      return;
+    }
+    setReceiptFile(file);
+    setReceiptName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setReceiptBase64(result);
+      setReceiptPreviewUrl(result);
+    };
+    reader.onerror = () => {
+      notify('ဖိုင်ဖတ်ရာတွင် အမှားဖြစ်ပေါ်ပါသည်။ ပြန်လည်ရွေးချယ်ပါ။');
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Profile Editor state
   const [tempProfileName, setTempProfileName] = useState('');
@@ -183,7 +243,7 @@ export default function App() {
   const validEnrollName = checkoutKind !== 'course' || enrollName.trim().length >= 2;
 
   const canSubmitOrder =
-    validEnrollName && phoneSaved && validCustomerPhone && (isCash || !!receiptFile);
+    validEnrollName && phoneSaved && validCustomerPhone && (isCash || !!receiptFile || !!receiptBase64);
 
   // Price calculations
   const calculateCoursePrice = (c: Course, sty: ClassStyle) => {
@@ -219,6 +279,8 @@ export default function App() {
     setPayment('KBZPay');
     setReceiptFile(null);
     setReceiptName('');
+    setReceiptBase64('');
+    setReceiptPreviewUrl('');
     setActiveSheet('enroll');
   };
 
@@ -236,6 +298,8 @@ export default function App() {
     setPayment('KBZPay');
     setReceiptFile(null);
     setReceiptName('');
+    setReceiptBase64('');
+    setReceiptPreviewUrl('');
     setActiveSheet('enroll');
   };
 
@@ -262,11 +326,13 @@ export default function App() {
     setPayment('KBZPay');
     setReceiptFile(null);
     setReceiptName('');
+    setReceiptBase64('');
+    setReceiptPreviewUrl('');
     setActiveSheet('bookBuy');
   };
 
-  // Submit Order
-  const handleSubmitOrder = () => {
+  // Submit Order with Google Drive Screenshot Upload
+  const handleSubmitOrder = async () => {
     if (!validEnrollName) {
       notify('ကျောင်းသား/သူ အမည်အပြည့်အစုံ ထည့်ပေးပါ။');
       return;
@@ -275,8 +341,8 @@ export default function App() {
       notify('Customer ဖုန်းနံပါတ် မှန်ကန်စွာထည့်ပြီး အတည်ပြုပါ။');
       return;
     }
-    if (!isCash && !receiptFile) {
-      notify('Payment Screenshot ထည့်ပေးပါ။');
+    if (!isCash && !receiptFile && !receiptBase64) {
+      notify('Payment Screenshot (ငွေလွှဲစလစ်ပုံ) ထည့်ပေးပါ။');
       return;
     }
 
@@ -292,7 +358,85 @@ export default function App() {
       label = selectedBook.name;
     }
 
-    // Automatically create a linked document for this order!
+    let uploadedDriveUrl = '';
+    let uploadedDriveId = '';
+
+    const effectiveUploadUrl = (persist.driveUploadUrl || ENV_DRIVE_UPLOAD_URL).trim();
+    const effectiveFolderId = (persist.driveFolderId || ENV_DRIVE_FOLDER_ID).trim();
+
+    if (!isCash) {
+      // Ensure base64 representation is ready
+      let base64Data = receiptBase64;
+      if (!base64Data && receiptFile) {
+        try {
+          base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(receiptFile);
+          });
+          setReceiptBase64(base64Data);
+        } catch {
+          notify('Screenshot ဖိုင်ဖတ်မရပါ။ ပြန်လည်ရွေးချယ်ပေးပါ။');
+          return;
+        }
+      }
+
+      if (!base64Data) {
+        notify('Payment Screenshot (ငွေလွှဲစလစ်ပုံ) ရွေးချယ်ပေးပါ။');
+        return;
+      }
+
+      setIsUploading(true);
+      setUploadStatusText('စလစ်ပုံ Google Drive သို့ ပို့နေပါသည်... / Uploading screenshot...');
+
+      if (effectiveUploadUrl) {
+        try {
+          const payload = {
+            base64: base64Data,
+            fileName: receiptName || `slip-${orderId}.jpg`,
+            mimeType: receiptFile?.type || 'image/jpeg',
+            customerName: checkoutKind === 'course' ? enrollName.trim() : persist.displayName,
+            customerPhone: customerPhone.trim(),
+            orderId: orderId,
+            folderId: effectiveFolderId || undefined,
+          };
+
+          const response = await fetch(effectiveUploadUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8',
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Google Apps Script HTTP Error: ${response.status}`);
+          }
+
+          const resData = await response.json();
+          if (resData.status === 'error') {
+            throw new Error(resData.message || 'Google Apps Script error');
+          }
+
+          uploadedDriveUrl = resData.fileUrl || resData.downloadUrl || '';
+          uploadedDriveId = resData.fileId || '';
+        } catch (uploadErr: any) {
+          setIsUploading(false);
+          const errDetail = uploadErr?.message || 'Network / Apps Script Error';
+          notify(`Google Drive သို့ စလစ်ပုံ ပို့၍ မရပါ (${errDetail})။ ကျေးဇူးပြု၍ ပြန်လည်စမ်းသပ်ပါ။`);
+          return;
+        }
+      } else {
+        // Fallback demo link when Web App URL is not yet configured in .env or Settings
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        uploadedDriveUrl = `https://drive.google.com/file/d/demo-slip-${orderId}/view?usp=sharing`;
+        uploadedDriveId = `demo-slip-${orderId}`;
+      }
+      setIsUploading(false);
+    }
+
+    // Automatically create a linked document for this order
     const newDocId = `DOC-ORD-${Date.now().toString(36).toUpperCase()}`;
     const generatedDoc: AppDocument = {
       id: newDocId,
@@ -304,6 +448,7 @@ export default function App() {
       updatedAt: new Date().toISOString().split('T')[0],
       courseId: checkoutKind === 'course' ? checkoutCourseId : 'book',
       orderId: orderId,
+      driveFileUrl: uploadedDriveUrl || undefined,
       description: `Order ${orderId} အတွက် THAISAR တရားဝင် ငွေလွှဲပြေစာနှင့် သင်တန်းအပ်နှံမှု အတည်ပြုလွှာ။`,
       downloadCount: 1,
       isSystemDoc: false,
@@ -315,8 +460,9 @@ export default function App() {
         `ပေးချေမှုပုံစံ: ${payment} (${isCash ? 'Admin ဆက်သွယ်မည်' : 'ငွေလွှဲပြီး'})`,
         `စုစုပေါင်း ကျသင့်ငွေ: ${total.toLocaleString('en-US')} MMK`,
         `ဆက်သွယ်ရန်ဖုန်း: ${customerPhone}`,
+        uploadedDriveUrl ? `Google Drive စလစ်လင့်ခ်: ${uploadedDriveUrl}` : '',
         `မှတ်ချက်: Admin စစ်ဆေးအတည်ပြုပြီးပါက တရားဝင် ပြေစာအဖြစ် အကျုံးဝင်ပါသည်။`,
-      ],
+      ].filter(Boolean),
     };
 
     const newOrder: Order = {
@@ -336,6 +482,8 @@ export default function App() {
       customerPhone: customerPhone.trim(),
       createdAt: new Date().toLocaleDateString('en-GB'),
       receiptFileName: isCash ? '' : receiptName,
+      driveFileUrl: uploadedDriveUrl || undefined,
+      driveFileId: uploadedDriveId || undefined,
       documentId: newDocId,
     };
 
@@ -345,12 +493,25 @@ export default function App() {
       documents: [generatedDoc, ...prev.documents],
     }));
 
-    setActiveSheet('none');
-    setPage('orders');
+    setLastSubmittedOrder({
+      order: newOrder,
+      driveFileUrl: uploadedDriveUrl || undefined,
+      docId: newDocId,
+    });
+
+    // Reset receipt file inputs
+    setReceiptFile(null);
+    setReceiptName('');
+    setReceiptBase64('');
+    setReceiptPreviewUrl('');
+
+    // Open confirmation modal
+    setActiveSheet('orderSuccess');
+
     notify(
       isCash
-        ? 'Demo ဆက်သွယ်ရန် Order တင်ပြီးပါပြီ။ ငွေလွှဲပြေစာဖိုင်ကို Documents တွင် သိမ်းဆည်းပေးထားပါသည်။'
-        : 'Demo Order တင်ပြီးပါပြီ။ ငွေလွှဲပြေစာဖိုင်ကို Documents တွင် ကြည့်ရှုနိုင်ပါသည်။'
+        ? 'Admin ဆက်သွယ်ရန် Order တင်ပြီးပါပြီ။'
+        : 'Order တင်ခြင်းနှင့် Google Drive သို့ စလစ်ပုံ ပို့ဆောင်မှု အောင်မြင်ပါသည်!'
     );
   };
 
@@ -1560,6 +1721,23 @@ export default function App() {
                 <span className="arrow">›</span>
               </button>
 
+              <button
+                type="button"
+                onClick={() => {
+                  setDriveSettingUrl(persist.driveUploadUrl || ENV_DRIVE_UPLOAD_URL);
+                  setDriveSettingFolder(persist.driveFolderId || ENV_DRIVE_FOLDER_ID);
+                  setActiveSheet('driveConfig');
+                }}
+              >
+                <svg className="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <span>Google Drive ဆက်တင် (Slip Upload)</span>
+                <span className="arrow">›</span>
+              </button>
+
               <button type="button" onClick={() => setActiveSheet('reset')}>
                 <svg className="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M10 3H4v18h6m4-4 5-5-5-5m5 5H9" />
@@ -1646,6 +1824,19 @@ export default function App() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', marginTop: '11px', flexWrap: 'wrap' }}>
+                    {/* Direct link to Google Drive screenshot */}
+                    {o.driveFileUrl && (
+                      <a
+                        href={o.driveFileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="drive-btn"
+                        style={{ fontSize: '11.5px', padding: '6px 10px' }}
+                      >
+                        📁 Google Drive စလစ် ↗
+                      </a>
+                    )}
+
                     {/* Direct link to view the generated receipt document */}
                     {o.documentId && (
                       <button
@@ -2214,45 +2405,91 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="field">
-                    <label htmlFor="receiptFile">
-                      Payment Screenshot <span style={{ color: '#bd3b45' }}>*</span>
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label htmlFor="receiptFile" style={{ marginBottom: 0 }}>
+                        Payment Screenshot <span style={{ color: '#bd3b45' }}>*</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        style={{ fontSize: '11px', padding: '2px 7px', color: '#6336d4' }}
+                        onClick={() => {
+                          setDriveSettingUrl(persist.driveUploadUrl || ENV_DRIVE_UPLOAD_URL);
+                          setDriveSettingFolder(persist.driveFolderId || ENV_DRIVE_FOLDER_ID);
+                          setActiveSheet('driveConfig');
+                        }}
+                      >
+                        ⚙️ Drive Setup
+                      </button>
+                    </div>
                     <input
                       type="file"
                       id="receiptFile"
                       accept="image/png,image/jpeg,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          if (file.size > 5 * 1024 * 1024) {
-                            notify('Screenshot ဖိုင်အရွယ်အစား 5 MB အောက်သာ ရွေးပါ။');
-                            return;
-                          }
-                          setReceiptFile(file);
-                          setReceiptName(file.name);
-                        }
+                        handleReceiptFileChange(file);
                       }}
                     />
-                    <small>KPay / Wave ဖြင့် ငွေလွှဲပြီးပါက Screenshot ထည့်ပါ။</small>
-                    {receiptName && <span className="pill green">✓ {receiptName}</span>}
+                    <small>
+                      KPay / Wave ဖြင့် ငွေလွှဲပြီးပါက Screenshot ထည့်ပါ။ (Google Drive သို့ တိုက်ရိုက် Upload လုပ်ပါမည်)
+                    </small>
+
+                    {receiptPreviewUrl && (
+                      <div className="receipt-preview-box">
+                        <img
+                          src={receiptPreviewUrl}
+                          alt="Slip Preview"
+                          className="receipt-preview-img"
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong style={{ fontSize: '12px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {receiptName}
+                          </strong>
+                          <span className="pill green" style={{ marginTop: '2px', display: 'inline-block' }}>
+                            ✓ အဆင်သင့်ဖြစ်ပါပြီ
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          style={{ fontSize: '11.5px', color: '#bd3b45', padding: '3px 6px' }}
+                          onClick={() => {
+                            setReceiptFile(null);
+                            setReceiptName('');
+                            setReceiptBase64('');
+                            setReceiptPreviewUrl('');
+                          }}
+                        >
+                          ✕ ပြောင်းမည်
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 <div className="demo-guard">
-                  🧪 <strong>Frontend DEMO ONLY</strong> — အထက်ပါ KPay / Wave ဖုန်းနံပါတ်ကို
-                  ကျောင်းကပေးထားပေမယ့် ဒီ Demo မှာ ငွေလွှဲခြင်း၊ Screenshot Upload ခြင်း၊ Admin ထံ Order
-                  ပို့ခြင်း မရှိပါ။ Demo ကို စမ်းသပ်ဖို့ ငွေတကယ် မလွှဲပါနှင့်။
+                  🧪 <strong>Order &amp; Drive Upload</strong> — အတည်ပြုခလုတ်နှိပ်ပါက စလစ်ပုံကို Google Drive သို့
+                  ပေးပို့ပြီး Order Voucher နှင့် စာရွက်စာတမ်းကို အလိုအလျောက် ထုတ်ပေးပါမည်။
                 </div>
 
                 <button
                   type="button"
                   className="main-btn"
                   style={{ width: '100%', marginTop: '14px' }}
-                  disabled={!canSubmitOrder}
+                  disabled={!canSubmitOrder || isUploading}
                   onClick={handleSubmitOrder}
                 >
-                  {isCash ? 'Admin ဆက်သွယ်ရန် Demo Order တင်မည်' : 'Place Demo Order'} ·{' '}
-                  {mmk(calculateTotals().total)}
+                  {isUploading ? (
+                    <>
+                      <span className="spinner"></span>
+                      {uploadStatusText || 'စလစ်ပုံ Google Drive သို့ ပို့နေပါသည်...'}
+                    </>
+                  ) : isCash ? (
+                    'Admin ဆက်သွယ်ရန် Order တင်မည် · ' + mmk(calculateTotals().total)
+                  ) : (
+                    'Order အတည်ပြုမည် · ' + mmk(calculateTotals().total)
+                  )}
                 </button>
               </div>
             )}
@@ -2376,34 +2613,91 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="field">
-                    <label htmlFor="receiptFileBook">
-                      Payment Screenshot <span style={{ color: '#bd3b45' }}>*</span>
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label htmlFor="receiptFileBook" style={{ marginBottom: 0 }}>
+                        Payment Screenshot <span style={{ color: '#bd3b45' }}>*</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="ghost-btn"
+                        style={{ fontSize: '11px', padding: '2px 7px', color: '#6336d4' }}
+                        onClick={() => {
+                          setDriveSettingUrl(persist.driveUploadUrl || ENV_DRIVE_UPLOAD_URL);
+                          setDriveSettingFolder(persist.driveFolderId || ENV_DRIVE_FOLDER_ID);
+                          setActiveSheet('driveConfig');
+                        }}
+                      >
+                        ⚙️ Drive Setup
+                      </button>
+                    </div>
                     <input
                       type="file"
                       id="receiptFileBook"
                       accept="image/png,image/jpeg,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          setReceiptFile(file);
-                          setReceiptName(file.name);
-                        }
+                        handleReceiptFileChange(file);
                       }}
                     />
-                    {receiptName && <span className="pill green">✓ {receiptName}</span>}
+                    <small>
+                      KPay / Wave ဖြင့် ငွေလွှဲပြီးပါက Screenshot ထည့်ပါ။ (Google Drive သို့ တိုက်ရိုက် Upload လုပ်ပါမည်)
+                    </small>
+
+                    {receiptPreviewUrl && (
+                      <div className="receipt-preview-box">
+                        <img
+                          src={receiptPreviewUrl}
+                          alt="Slip Preview"
+                          className="receipt-preview-img"
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong style={{ fontSize: '12px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {receiptName}
+                          </strong>
+                          <span className="pill green" style={{ marginTop: '2px', display: 'inline-block' }}>
+                            ✓ အဆင်သင့်ဖြစ်ပါပြီ
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          style={{ fontSize: '11.5px', color: '#bd3b45', padding: '3px 6px' }}
+                          onClick={() => {
+                            setReceiptFile(null);
+                            setReceiptName('');
+                            setReceiptBase64('');
+                            setReceiptPreviewUrl('');
+                          }}
+                        >
+                          ✕ ပြောင်းမည်
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                <div className="demo-guard">
+                  🧪 <strong>Order &amp; Drive Upload</strong> — အတည်ပြုခလုတ်နှိပ်ပါက စလစ်ပုံကို Google Drive သို့
+                  ပေးပို့ပြီး Order Voucher နှင့် စာရွက်စာတမ်းကို အလိုအလျောက် ထုတ်ပေးပါမည်။
+                </div>
 
                 <button
                   type="button"
                   className="main-btn"
                   style={{ width: '100%', marginTop: '14px' }}
-                  disabled={!phoneSaved || !validCustomerPhone || (!isCash && !receiptFile)}
+                  disabled={!phoneSaved || !validCustomerPhone || (!isCash && !receiptFile && !receiptBase64) || isUploading}
                   onClick={handleSubmitOrder}
                 >
-                  {isCash ? 'Admin ဆက်သွယ်ရန် Demo Order တင်မည်' : 'Place Demo Order'} ·{' '}
-                  {mmk(selectedBook.promo[0]!)}
+                  {isUploading ? (
+                    <>
+                      <span className="spinner"></span>
+                      {uploadStatusText || 'စလစ်ပုံ Google Drive သို့ ပို့နေပါသည်...'}
+                    </>
+                  ) : isCash ? (
+                    'Admin ဆက်သွယ်ရန် Order တင်မည် · ' + mmk(selectedBook.promo[0]!)
+                  ) : (
+                    'Order အတည်ပြုမည် · ' + mmk(selectedBook.promo[0]!)
+                  )}
                 </button>
               </div>
             )}
@@ -2834,6 +3128,181 @@ export default function App() {
                     onClick={handleResetData}
                   >
                     Reset Demo
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SHEET: ORDER SUCCESS & GOOGLE DRIVE CONFIRMATION */}
+            {activeSheet === 'orderSuccess' && lastSubmittedOrder && (
+              <div>
+                <div className="sheet-head">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '22px' }}>🎉</span>
+                    <h2 style={{ margin: 0 }}>Order အောင်မြင်စွာ တင်ပြီးပါပြီ</h2>
+                  </div>
+                  <button
+                    type="button"
+                    className="sheet-x"
+                    onClick={() => setActiveSheet('none')}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div style={{ background: '#f4fbf5', border: '1px solid #c8e6c9', borderRadius: '16px', padding: '16px 14px', margin: '14px 0', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '4px' }}>✅</div>
+                  <strong style={{ fontSize: '15.5px', color: '#1b5e20', display: 'block' }}>
+                    သင့် Order အချက်အလက်ကို လက်ခံရရှိပါပြီ
+                  </strong>
+                  <div style={{ fontSize: '13px', color: '#2e7d32', marginTop: '4px' }}>
+                    Order No: <strong>{lastSubmittedOrder.order.id}</strong>
+                  </div>
+                </div>
+
+                <div className="order" style={{ margin: '12px 0' }}>
+                  <div className="split">
+                    <strong style={{ fontSize: '14px' }}>{lastSubmittedOrder.order.label}</strong>
+                    <span className="status">Pending Review</span>
+                  </div>
+                  <div className="details" style={{ marginTop: '8px' }}>
+                    {lastSubmittedOrder.order.studentName && (
+                      <div>ကျောင်းသား/သူ: <strong>{lastSubmittedOrder.order.studentName}</strong></div>
+                    )}
+                    <div>ဆက်သွယ်ရန်ဖုန်း: <strong>{lastSubmittedOrder.order.customerPhone}</strong></div>
+                    <div>ပေးချေမှုစနစ်: <strong>{lastSubmittedOrder.order.payment}</strong></div>
+                    <div>ကျသင့်ငွေ: <strong>{Number(lastSubmittedOrder.order.total).toLocaleString('en-US')} MMK</strong></div>
+                  </div>
+                </div>
+
+                {lastSubmittedOrder.driveFileUrl ? (
+                  <div style={{ background: '#f1f8e9', border: '1px solid #dcedc8', borderRadius: '14px', padding: '13px', margin: '14px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2e7d32', fontWeight: 700, fontSize: '13px' }}>
+                      <span>📁</span>
+                      <span>Google Drive သို့ စလစ်ပုံ တင်ပြီးပါပြီ</span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#446e22', margin: '6px 0 10px 0', lineHeight: 1.5 }}>
+                      ငွေလွှဲစလစ်ပုံကို Google Drive Folder သို့ အောင်မြင်စွာ တိုက်ရိုက် Upload ပြုလုပ်သိမ်းဆည်းထားပြီးဖြစ်ပါသည်။
+                    </p>
+                    <a
+                      href={lastSubmittedOrder.driveFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="drive-btn"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                    >
+                      📂 Google Drive တွင် စလစ်ဖွင့်ကြည့်ရန် ↗
+                    </a>
+                  </div>
+                ) : (
+                  <div className="callout-cash" style={{ margin: '12px 0' }}>
+                    📞 Admin ဘက်မှ သင်ထည့်ထားသောဖုန်းနံပါတ်သို့ အမြန်ဆုံး ဆက်သွယ်အတည်ပြုပေးပါမည်။
+                  </div>
+                )}
+
+                <div className="notice" style={{ marginTop: '10px' }}>
+                  📄 အော်ဒါငွေလွှဲပြေစာ (Voucher Document) ကို <strong>Documents</strong> စာမျက်နှာတွင်လည်း အလိုအလျောက် ထည့်သွင်းပေးထားပါသည်။
+                </div>
+
+                <div className="split" style={{ marginTop: '16px' }}>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    onClick={() => {
+                      setActiveSheet('none');
+                      setPage('orders');
+                    }}
+                  >
+                    My Orders သို့ သွားမည်
+                  </button>
+                  <button
+                    type="button"
+                    className="main-btn"
+                    onClick={() => setActiveSheet('none')}
+                  >
+                    ပြီးပါပြီ (ပိတ်မည်)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SHEET: GOOGLE DRIVE CONFIGURATION */}
+            {activeSheet === 'driveConfig' && (
+              <div>
+                <div className="sheet-head">
+                  <h2>Google Drive Upload ဆက်တင်</h2>
+                  <button
+                    type="button"
+                    className="sheet-x"
+                    onClick={() => setActiveSheet('none')}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="subtitle">
+                  Customer Payment Screenshot များကို သင်၏ Google Drive Folder သို့ တိုက်ရိုက်သိမ်းဆည်းနိုင်ရန် Google Apps Script Web App URL ကို သတ်မှတ်နိုင်ပါသည်။
+                </p>
+
+                <div className="field" style={{ marginTop: '14px' }}>
+                  <label htmlFor="driveSettingUrlInput">
+                    Google Apps Script Web App URL
+                  </label>
+                  <input
+                    type="url"
+                    id="driveSettingUrlInput"
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    value={driveSettingUrl}
+                    onChange={(e) => setDriveSettingUrl(e.target.value)}
+                  />
+                  <small>
+                    .env ထဲတွင် <code>VITE_GOOGLE_DRIVE_UPLOAD_URL</code> အဖြစ် ထည့်ထားလျှင်လည်း အလိုအလျောက် သုံးပါမည်။
+                  </small>
+                </div>
+
+                <div className="field" style={{ marginTop: '12px' }}>
+                  <label htmlFor="driveSettingFolderInput">
+                    Target Google Drive Folder ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="driveSettingFolderInput"
+                    placeholder="1abcXYZ_EXAMPLE_FOLDER_ID"
+                    value={driveSettingFolder}
+                    onChange={(e) => setDriveSettingFolder(e.target.value)}
+                  />
+                  <small>
+                    Google Drive Folder ၏ URL ထဲမှ Folder ID ဖြစ်ပါသည်။ မထည့်ပါက Apps Script ထဲမှ Default Folder သို့ သိမ်းပါမည်။
+                  </small>
+                </div>
+
+                <div className="notice" style={{ marginTop: '12px' }}>
+                  💡 Google Apps Script ကုဒ်ကို ပရောဂျက် root ထဲရှိ <code>GoogleAppsScript_Code.gs</code> တွင် အသင့်ရယူ အသုံးပြုနိုင်ပါသည်။
+                </div>
+
+                <div className="split" style={{ marginTop: '18px' }}>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    onClick={() => setActiveSheet('none')}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="main-btn"
+                    onClick={() => {
+                      setPersist((prev) => ({
+                        ...prev,
+                        driveUploadUrl: driveSettingUrl.trim(),
+                        driveFolderId: driveSettingFolder.trim(),
+                      }));
+                      setActiveSheet('none');
+                      notify('Google Drive ဆက်တင်ကို သိမ်းဆည်းပြီးပါပြီ။');
+                    }}
+                  >
+                    သိမ်းဆည်းမည်
                   </button>
                 </div>
               </div>

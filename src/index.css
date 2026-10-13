@@ -2037,3 +2037,78 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     transition: none !important;
   }
 }
+
+/* Google Drive & Upload Indicators */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  border-top-color: #ffffff;
+  animation: spin 0.75s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+.spinner-purple {
+  border: 2px solid rgba(99, 54, 212, 0.2);
+  border-top-color: #6336d4;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.receipt-preview-box {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #f8f6fd;
+  border: 1px solid #e5dcfa;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.receipt-preview-img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #d4c6f5;
+  background: #ffffff;
+}
+
+.drive-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  background: #e8f5e9;
+  color: #1b5e20;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.drive-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #1b873f;
+  color: #ffffff !important;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.drive-btn:hover {
+  opacity: 0.92;
+}
+

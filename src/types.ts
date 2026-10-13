@@ -63,6 +63,8 @@ export interface Order {
   customerPhone: string;
   createdAt: string;
   receiptFileName?: string;
+  driveFileUrl?: string;
+  driveFileId?: string;
   documentId?: string;
 }
 
@@ -92,6 +94,7 @@ export interface AppDocument {
   updatedAt: string;
   courseId?: 'speaking' | 'skills' | 'book' | 'general';
   orderId?: string;
+  driveFileUrl?: string;
   description: string;
   downloadCount: number;
   isSystemDoc?: boolean;
