@@ -6,7 +6,7 @@
   --purpleLight: #f1ebff;
   --orange: #ff9b3f;
   --ink: #252140;
-  --muted: #84839a;
+  --muted: #59566e;
   --line: #efedf5;
   --bg: #f7f7fc;
   --card: #fff;
@@ -498,7 +498,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .price-muted {
   font-size: 10px;
-  color: #8d889c;
+  color: #656075;
 }
 
 .buy-sm {
@@ -1276,7 +1276,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .smallprint {
   font-size: 10px;
-  color: #9b96a9;
+  color: #686377;
   line-height: 1.8;
   margin: 12px 0 0;
 }

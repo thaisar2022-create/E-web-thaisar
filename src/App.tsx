@@ -29,6 +29,12 @@ import {
   tiers,
   initialDocuments,
 } from './data';
+import {
+  supabase,
+  isSupabaseConfigured,
+  getOrCreateClientId,
+  SUPABASE_STORAGE_BUCKET,
+} from './supabaseClient';
 
 const STORE_KEY = 'thaisar-mobile-demo-v11-docs';
 
@@ -121,6 +127,164 @@ export default function App() {
     }
   }, [persist]);
 
+  // Dynamic SEO document titles based on active page
+  useEffect(() => {
+    const titles: Record<Page, string> = {
+      home: 'THAISAR — Thai Language School & Learning Hub',
+      courses: 'သင်တန်းများ | THAISAR',
+      tmm: 'TMM ထိုင်းစကားပြောသီးသန့် | THAISAR',
+      tls: 'TLS 4 Skills သင်တန်း | THAISAR',
+      books: 'ထိုင်းစာဖတ်စာအုပ်များ | THAISAR',
+      bookDetail: 'စာအုပ်အသေးစိတ် | THAISAR',
+      free: 'အခမဲ့ လေ့လာရန် | THAISAR',
+      account: 'ကျွန်ုပ်၏ အကောင့် | THAISAR',
+      orders: 'အော်ဒါမှတ်တမ်းများ | THAISAR',
+      documents: 'စာရွက်စာတမ်းများ | THAISAR',
+    };
+    document.title = titles[page] || 'THAISAR — Thai Language School';
+  }, [page]);
+
+  // Initial load: Fetch from Supabase tables (orders, documents, profiles) if configured
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const clientId = getOrCreateClientId();
+
+    const client = supabase;
+    if (!client) return;
+
+    const fetchSupabaseData = async () => {
+      try {
+        // 1. Fetch user profile for this clientId
+        const { data: profileRow, error: profileErr } = await client
+          .from('profiles')
+          .select('*')
+          .eq('client_id', clientId)
+          .maybeSingle();
+
+        if (!profileErr && profileRow) {
+          setPersist((prev) => ({
+            ...prev,
+            displayName: profileRow.display_name || profileRow.displayName || prev.displayName,
+            profile: {
+              phone: profileRow.phone ?? prev.profile.phone,
+              viberPhone: profileRow.viber_phone ?? profileRow.viberPhone ?? prev.profile.viberPhone,
+              telegramPhone:
+                profileRow.telegram_phone ?? profileRow.telegramPhone ?? prev.profile.telegramPhone,
+              gmail: profileRow.gmail ?? prev.profile.gmail,
+              address: profileRow.address ?? prev.profile.address,
+            },
+          }));
+        }
+
+        // 2. Fetch orders for this client
+        const { data: ordersRows, error: ordersErr } = await client
+          .from('orders')
+          .select('*')
+          .or(`client_id.eq.${clientId},client_id.is.null`)
+          .order('created_at', { ascending: false });
+
+        if (!ordersErr && Array.isArray(ordersRows) && ordersRows.length > 0) {
+          const fetchedOrders: Order[] = ordersRows.map((row: any) => ({
+            id: row.id,
+            kind: row.kind || 'course',
+            itemId: row.item_id || row.itemId || '',
+            label: row.label || '',
+            status: row.status || 'pending',
+            currency: row.currency || 'MMK',
+            total: Number(row.total) || 0,
+            bookIncluded: Boolean(row.book_included ?? row.bookIncluded),
+            bookPrice: Number(row.book_price ?? row.bookPrice) || 0,
+            delivery: row.delivery || null,
+            payment: row.payment || 'KBZPay',
+            studentName: row.student_name ?? row.studentName ?? null,
+            telegramUsername: row.telegram_username ?? row.telegramUsername ?? null,
+            customerPhone: row.customer_phone ?? row.customerPhone ?? '',
+            createdAt: row.created_at
+              ? new Date(row.created_at).toLocaleDateString('en-GB')
+              : row.createdAt || '',
+            receiptFileName: row.receipt_file_name ?? row.receiptFileName ?? '',
+            driveFileUrl: row.drive_file_url ?? row.driveFileUrl ?? undefined,
+            driveFileId: row.drive_file_id ?? row.driveFileId ?? undefined,
+            documentId: row.document_id ?? row.documentId ?? undefined,
+          }));
+
+          setPersist((prev) => {
+            const fetchedIds = new Set(fetchedOrders.map((o) => o.id));
+            const retainedLocal = prev.orders.filter((o) => !fetchedIds.has(o.id));
+            return {
+              ...prev,
+              orders: [...fetchedOrders, ...retainedLocal],
+            };
+          });
+        }
+
+        // 3. Fetch documents (and seed initialDocuments if empty)
+        const { data: docsRows, error: docsErr } = await client
+          .from('documents')
+          .select('*')
+          .order('updated_at', { ascending: false });
+
+        if (!docsErr) {
+          if (Array.isArray(docsRows) && docsRows.length > 0) {
+            const fetchedDocs: AppDocument[] = docsRows.map((d: any) => ({
+              id: d.id,
+              title: d.title,
+              englishTitle: d.english_title || d.englishTitle || d.title,
+              category: d.category || 'course_materials',
+              fileType: d.file_type || d.fileType || 'PDF',
+              fileSize: d.file_size || d.fileSize || '1 MB',
+              updatedAt: d.updated_at
+                ? typeof d.updated_at === 'string' && d.updated_at.includes('T')
+                  ? d.updated_at.split('T')[0]
+                  : d.updated_at
+                : new Date().toISOString().split('T')[0],
+              courseId: d.course_id || d.courseId || undefined,
+              orderId: d.order_id || d.orderId || undefined,
+              driveFileUrl: d.drive_file_url || d.driveFileUrl || undefined,
+              description: d.description || '',
+              downloadCount: Number(d.download_count ?? d.downloadCount) || 0,
+              isSystemDoc: Boolean(d.is_system_doc ?? d.isSystemDoc),
+              pagesCount: Number(d.pages_count ?? d.pagesCount) || 1,
+              contentPreview: Array.isArray(d.content_preview)
+                ? d.content_preview
+                : Array.isArray(d.contentPreview)
+                ? d.contentPreview
+                : undefined,
+            }));
+
+            setPersist((prev) => ({
+              ...prev,
+              documents: fetchedDocs,
+            }));
+          } else if (Array.isArray(docsRows) && docsRows.length === 0) {
+            // Seed initialDocuments into Supabase documents table
+            const seedPayload = initialDocuments.map((doc) => ({
+              id: doc.id,
+              title: doc.title,
+              english_title: doc.englishTitle,
+              category: doc.category,
+              file_type: doc.fileType,
+              file_size: doc.fileSize,
+              updated_at: doc.updatedAt,
+              course_id: doc.courseId || null,
+              description: doc.description,
+              download_count: doc.downloadCount,
+              is_system_doc: doc.isSystemDoc ?? true,
+              pages_count: doc.pagesCount ?? 1,
+              content_preview: doc.contentPreview || [],
+            }));
+            await client.from('documents').insert(seedPayload);
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase initial fetch warning:', err);
+      }
+    };
+
+    fetchSupabaseData();
+  }, []);
+
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -147,6 +311,19 @@ export default function App() {
     | 'orderSuccess'
     | 'driveConfig'
   >('none');
+
+  // Accessibility: Close any open bottom sheet modal on Escape key press
+  useEffect(() => {
+    if (activeSheet === 'none') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveSheet('none');
+        setPreviewDoc(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeSheet]);
 
   // Checkout State
   const [checkoutKind, setCheckoutKind] = useState<'course' | 'book'>('course');
@@ -367,8 +544,38 @@ export default function App() {
     const effectiveUploadUrl = (persist.driveUploadUrl || ENV_DRIVE_UPLOAD_URL).trim();
     const effectiveFolderId = (persist.driveFolderId || ENV_DRIVE_FOLDER_ID).trim();
 
+    let supabaseSlipUrl = '';
+
     if (!isCash) {
-      // Ensure base64 representation is ready
+      setIsUploading(true);
+
+      // 1. Upload receipt to Supabase Storage bucket 'thaisar-uploads'
+      if (isSupabaseConfigured && supabase && receiptFile) {
+        try {
+          setUploadStatusText('စလစ်ပုံ Supabase Cloud သို့ သိမ်းဆည်းနေပါသည်... / Uploading to Supabase Storage...');
+          const cleanName = receiptFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `slips/${orderId}-${cleanName}`;
+          const { data: uploadData, error: uploadErr } = await supabase.storage
+            .from(SUPABASE_STORAGE_BUCKET)
+            .upload(storagePath, receiptFile, {
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (!uploadErr && uploadData) {
+            const { data: publicUrlData } = supabase.storage
+              .from(SUPABASE_STORAGE_BUCKET)
+              .getPublicUrl(storagePath);
+            supabaseSlipUrl = publicUrlData?.publicUrl || '';
+          } else if (uploadErr) {
+            console.warn('Supabase Storage notice:', uploadErr.message);
+          }
+        } catch (storageErr) {
+          console.warn('Supabase storage exception:', storageErr);
+        }
+      }
+
+      // Ensure base64 representation is ready for Google Drive / Google Apps Script
       let base64Data = receiptBase64;
       if (!base64Data && receiptFile) {
         try {
@@ -381,19 +588,21 @@ export default function App() {
           setReceiptBase64(base64Data);
         } catch {
           notify('Screenshot ဖိုင်ဖတ်မရပါ။ ပြန်လည်ရွေးချယ်ပေးပါ။');
+          setIsUploading(false);
           return;
         }
       }
 
-      if (!base64Data) {
+      if (!base64Data && !supabaseSlipUrl) {
         notify('Payment Screenshot (ငွေလွှဲစလစ်ပုံ) ရွေးချယ်ပေးပါ။');
+        setIsUploading(false);
         return;
       }
 
-      setIsUploading(true);
       setUploadStatusText('အော်ဒါနှင့် ငွေလွှဲစလစ် ပေးပို့နေပါသည်... / Submitting order & slip...');
 
-      if (effectiveUploadUrl) {
+      // 2. Google Apps Script / Drive upload (optional secondary backup or main storage)
+      if (effectiveUploadUrl && base64Data) {
         try {
           const payload = {
             timestamp: new Date().toISOString(),
@@ -405,12 +614,12 @@ export default function App() {
             fileName: receiptName || `slip-${orderId}.jpg`,
             fileMimeType: receiptFile?.type || 'image/jpeg',
             fileBase64: base64Data,
-            // Compatibility & helper fields for Google Apps Script
             orderId: orderId,
             base64: base64Data,
             mimeType: receiptFile?.type || 'image/jpeg',
             customerPhone: customerPhone.trim(),
             folderId: effectiveFolderId || undefined,
+            supabaseSlipUrl: supabaseSlipUrl || undefined,
           };
 
           const response = await fetch(effectiveUploadUrl, {
@@ -433,16 +642,25 @@ export default function App() {
           uploadedDriveUrl = resData.fileUrl || resData.downloadUrl || '';
           uploadedDriveId = resData.fileId || '';
         } catch (uploadErr: any) {
-          setIsUploading(false);
-          const errDetail = uploadErr?.message || 'Network / Apps Script Error';
-          notify(`အော်ဒါနှင့် စလစ်ပုံ ပေးပို့၍ မရပါ (${errDetail})။ ကျေးဇူးပြု၍ ပြန်လည်စမ်းသပ်ပါ။`);
-          return;
+          if (!supabaseSlipUrl) {
+            setIsUploading(false);
+            const errDetail = uploadErr?.message || 'Network / Apps Script Error';
+            notify(`အော်ဒါနှင့် စလစ်ပုံ ပေးပို့၍ မရပါ (${errDetail})။ ကျေးဇူးပြု၍ ပြန်လည်စမ်းသပ်ပါ။`);
+            return;
+          }
         }
-      } else {
-        // Fallback demo link when Web App URL is not yet configured in .env or Settings
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        uploadedDriveUrl = `https://drive.google.com/file/d/demo-slip-${orderId}/view?usp=sharing`;
-        uploadedDriveId = `demo-slip-${orderId}`;
+      }
+
+      if (!uploadedDriveUrl) {
+        if (supabaseSlipUrl) {
+          uploadedDriveUrl = supabaseSlipUrl;
+          uploadedDriveId = `supa-${orderId}`;
+        } else {
+          // Fallback demo link when neither external upload endpoint is connected
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          uploadedDriveUrl = `https://drive.google.com/file/d/demo-slip-${orderId}/view?usp=sharing`;
+          uploadedDriveId = `demo-slip-${orderId}`;
+        }
       }
       setIsUploading(false);
     }
@@ -459,7 +677,7 @@ export default function App() {
       updatedAt: new Date().toISOString().split('T')[0],
       courseId: checkoutKind === 'course' ? checkoutCourseId : 'book',
       orderId: orderId,
-      driveFileUrl: uploadedDriveUrl || undefined,
+      driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
       description: `Order ${orderId} အတွက် THAISAR တရားဝင် ငွေလွှဲပြေစာနှင့် သင်တန်းအပ်နှံမှု အတည်ပြုလွှာ။`,
       downloadCount: 1,
       isSystemDoc: false,
@@ -471,7 +689,7 @@ export default function App() {
         `ပေးချေမှုပုံစံ: ${payment} (${isCash ? 'Admin ဆက်သွယ်မည်' : 'ငွေလွှဲပြီး'})`,
         `စုစုပေါင်း ကျသင့်ငွေ: ${total.toLocaleString('en-US')} MMK`,
         `ဆက်သွယ်ရန်ဖုန်း: ${customerPhone}`,
-        uploadedDriveUrl ? `Google Drive စလစ်လင့်ခ်: ${uploadedDriveUrl}` : '',
+        uploadedDriveUrl ? `ငွေလွှဲစလစ်လင့်ခ်: ${uploadedDriveUrl}` : '',
         `မှတ်ချက်: Admin စစ်ဆေးအတည်ပြုပြီးပါက တရားဝင် ပြေစာအဖြစ် အကျုံးဝင်ပါသည်။`,
       ].filter(Boolean),
     };
@@ -492,11 +710,65 @@ export default function App() {
       telegramUsername: checkoutKind === 'course' ? telegramUsername.trim() : null,
       customerPhone: customerPhone.trim(),
       createdAt: new Date().toLocaleDateString('en-GB'),
-      receiptFileName: isCash ? '' : receiptName,
-      driveFileUrl: uploadedDriveUrl || undefined,
+      receiptFileName: isCash ? '' : (receiptName || (receiptFile ? receiptFile.name : '')),
+      driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
       driveFileId: uploadedDriveId || undefined,
       documentId: newDocId,
     };
+
+    // Sync to Supabase tables if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const clientId = getOrCreateClientId();
+
+        // b) Insert new order into public.orders
+        await supabase.from('orders').insert({
+          id: orderId,
+          client_id: clientId,
+          kind: checkoutKind,
+          item_id: checkoutKind === 'course' ? selectedCourse.id : selectedBook.id,
+          label,
+          status: 'pending',
+          currency: 'MMK',
+          total,
+          book_included: checkoutKind === 'course' && addBook,
+          book_price: bookAddPrice,
+          delivery: checkoutKind === 'book' || addBook ? delivery : null,
+          payment,
+          student_name: checkoutKind === 'course' ? enrollName.trim() : null,
+          telegram_username: checkoutKind === 'course' ? telegramUsername.trim() : null,
+          customer_phone: customerPhone.trim(),
+          created_at: new Date().toISOString(),
+          receipt_file_name: isCash ? '' : (receiptName || (receiptFile ? receiptFile.name : '')),
+          drive_file_url: uploadedDriveUrl || supabaseSlipUrl || null,
+          drive_file_id: uploadedDriveId || null,
+          document_id: newDocId,
+          slip_url: supabaseSlipUrl || null,
+        });
+
+        // Insert generated receipt voucher into public.documents
+        await supabase.from('documents').insert({
+          id: newDocId,
+          client_id: clientId,
+          title: generatedDoc.title,
+          english_title: generatedDoc.englishTitle,
+          category: generatedDoc.category,
+          file_type: generatedDoc.fileType,
+          file_size: generatedDoc.fileSize,
+          updated_at: generatedDoc.updatedAt,
+          course_id: generatedDoc.courseId || null,
+          order_id: generatedDoc.orderId || null,
+          drive_file_url: generatedDoc.driveFileUrl || supabaseSlipUrl || null,
+          description: generatedDoc.description,
+          download_count: 1,
+          is_system_doc: false,
+          pages_count: 1,
+          content_preview: generatedDoc.contentPreview || [],
+        });
+      } catch (dbInsertErr) {
+        console.warn('Supabase insert notice:', dbInsertErr);
+      }
+    }
 
     setPersist((prev) => ({
       ...prev,
@@ -506,7 +778,7 @@ export default function App() {
 
     setLastSubmittedOrder({
       order: newOrder,
-      driveFileUrl: uploadedDriveUrl || undefined,
+      driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
       docId: newDocId,
     });
 
@@ -522,6 +794,8 @@ export default function App() {
     notify(
       isCash
         ? 'Admin ဆက်သွယ်ရန် Order တင်ပြီးပါပြီ။'
+        : isSupabaseConfigured
+        ? 'အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်! Supabase Cloud သို့ သိမ်းဆည်းပြီးပါပြီ။'
         : 'အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်! Google Sheet နှင့် Google Drive သို့ မှတ်တမ်းတင်ပြီးပါပြီ။'
     );
   };
@@ -559,19 +833,49 @@ export default function App() {
         return;
       }
     }
+    const newDisplayName = tempProfileName.trim() || 'THAISAR Member';
+    const newProfile: UserProfile = {
+      phone: tempProfilePhone.trim(),
+      viberPhone: tempProfileViber.trim(),
+      telegramPhone: tempProfileTelegram.trim(),
+      gmail: tempProfileGmail.trim(),
+      address: tempProfileAddress.trim(),
+    };
+
     setPersist((prev) => ({
       ...prev,
-      displayName: tempProfileName.trim() || 'THAISAR Member',
-      profile: {
-        phone: tempProfilePhone.trim(),
-        viberPhone: tempProfileViber.trim(),
-        telegramPhone: tempProfileTelegram.trim(),
-        gmail: tempProfileGmail.trim(),
-        address: tempProfileAddress.trim(),
-      },
+      displayName: newDisplayName,
+      profile: newProfile,
     }));
+
+    if (isSupabaseConfigured && supabase) {
+      const clientId = getOrCreateClientId();
+      supabase
+        .from('profiles')
+        .upsert(
+          {
+            client_id: clientId,
+            display_name: newDisplayName,
+            phone: newProfile.phone,
+            viber_phone: newProfile.viberPhone,
+            telegram_phone: newProfile.telegramPhone,
+            gmail: newProfile.gmail,
+            address: newProfile.address,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'client_id' }
+        )
+        .then(({ error }) => {
+          if (error) console.warn('Supabase profile sync warning:', error.message);
+        });
+    }
+
     setActiveSheet('none');
-    notify('ကိုယ်ရေးအချက်အလက် သိမ်းဆည်းပြီးပါပြီ (Demo)။');
+    notify(
+      isSupabaseConfigured
+        ? 'ကိုယ်ရေးအချက်အလက် Supabase Cloud တွင် သိမ်းဆည်းပြီးပါပြီ။'
+        : 'ကိုယ်ရေးအချက်အလက် သိမ်းဆည်းပြီးပါပြီ (Demo)။'
+    );
   };
 
   // Handle Reset Demo
@@ -595,12 +899,23 @@ export default function App() {
 
   // Handle Document Download
   const handleDownloadDoc = (doc: AppDocument) => {
+    const nextDownloadCount = (doc.downloadCount || 0) + 1;
     setPersist((prev) => ({
       ...prev,
       documents: prev.documents.map((d) =>
-        d.id === doc.id ? { ...d, downloadCount: d.downloadCount + 1 } : d
+        d.id === doc.id ? { ...d, downloadCount: nextDownloadCount } : d
       ),
     }));
+
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('documents')
+        .update({ download_count: nextDownloadCount })
+        .eq('id', doc.id)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase download count warning:', error.message);
+        });
+    }
 
     // Generate real downloadable text/PDF file simulation
     const content = `THAISAR THAI LANGUAGE SCHOOL\nOfficial Document: ${doc.title} (${doc.englishTitle})\nCategory: ${doc.category}\nUpdated: ${doc.updatedAt}\nFile Type: ${doc.fileType}\n\nOVERVIEW & CONTENT:\n${(doc.contentPreview || []).join('\n')}\n\nDescription:\n${doc.description}\n\nOfficial Verification: THAISAR Educational Management System (Demo)`;
@@ -627,6 +942,17 @@ export default function App() {
       setPreviewDoc(null);
       setActiveSheet('none');
     }
+
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('documents')
+        .delete()
+        .eq('id', docId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase delete document warning:', error.message);
+        });
+    }
+
     notify('စာရွက်စာတမ်း ဖျက်သိမ်းပြီးပါပြီ။');
   };
 
@@ -665,6 +991,31 @@ export default function App() {
       ...prev,
       documents: [newDoc, ...prev.documents],
     }));
+
+    if (isSupabaseConfigured && supabase) {
+      const clientId = getOrCreateClientId();
+      supabase
+        .from('documents')
+        .insert({
+          id: docId,
+          client_id: clientId,
+          title: newDoc.title,
+          english_title: newDoc.englishTitle,
+          category: newDoc.category,
+          file_type: newDoc.fileType,
+          file_size: newDoc.fileSize,
+          updated_at: newDoc.updatedAt,
+          course_id: newDoc.courseId || null,
+          description: newDoc.description,
+          download_count: 0,
+          is_system_doc: false,
+          pages_count: 5,
+          content_preview: newDoc.contentPreview || [],
+        })
+        .then(({ error }) => {
+          if (error) console.warn('Supabase document insert warning:', error.message);
+        });
+    }
 
     setNewDocTitle('');
     setNewDocEnTitle('');
@@ -712,8 +1063,12 @@ export default function App() {
         >
           <span className="brand-icon" style={{ overflow: 'hidden', padding: 0 }}>
             <img
-              src="https://lh3.googleusercontent.com/pw/AP1GczMFMASbiKtCOQX2oLMQ0r80AUQBTISjeYJp1r6goIb7YGa7a0p6MiZ2inIVYpUd5QNkDEDtT-zq5sikNOeXaZ9lR-XooKbjkKHQTXARimeevLOitPs=w2400"
+              src="https://lh3.googleusercontent.com/pw/AP1GczMFMASbiKtCOQX2oLMQ0r80AUQBTISjeYJp1r6goIb7YGa7a0p6MiZ2inIVYpUd5QNkDEDtT-zq5sikNOeXaZ9lR-XooKbjkKHQTXARimeevLOitPs=w128-h128-c"
               alt="THAISAR Logo"
+              width="39"
+              height="39"
+              fetchPriority="high"
+              decoding="async"
               style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '13px' }}
             />
           </span>
@@ -1611,7 +1966,44 @@ export default function App() {
               <div className="account-name">
                 <div className="avatar">👤</div>
                 <div>
-                  <strong>{persist.displayName}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <strong>{persist.displayName}</strong>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        backgroundColor: isSupabaseConfigured
+                          ? 'rgba(16, 185, 129, 0.12)'
+                          : 'rgba(100, 116, 139, 0.12)',
+                        color: isSupabaseConfigured ? '#047857' : '#64748b',
+                        border: `1px solid ${
+                          isSupabaseConfigured
+                            ? 'rgba(16, 185, 129, 0.3)'
+                            : 'rgba(100, 116, 139, 0.25)'
+                        }`,
+                      }}
+                      title={
+                        isSupabaseConfigured
+                          ? 'Synced with Supabase Cloud DB & Storage'
+                          : 'Running in Local Storage demo mode'
+                      }
+                    >
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: isSupabaseConfigured ? '#10b981' : '#94a3b8',
+                        }}
+                      />
+                      {isSupabaseConfigured ? 'Supabase Cloud Connected' : 'Local Demo Mode'}
+                    </span>
+                  </div>
                   <div className="tiny">Member ID: THM-DEMO-0001</div>
                   <div className="tiny">Demo Account — No Login Required</div>
                 </div>
@@ -2168,6 +2560,23 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
+            aria-label={
+              activeSheet === 'enroll'
+                ? 'သင်တန်းအပ်နှံရန် Dialog'
+                : activeSheet === 'bookBuy'
+                ? 'စာအုပ်ဝယ်ယူရန် Dialog'
+                : activeSheet === 'profile'
+                ? 'ကိုယ်ရေးအချက်အလက် ပြင်ရန် Dialog'
+                : activeSheet === 'docPreview'
+                ? previewDoc?.title || 'စာရွက်စာတမ်း ကြည့်ရှုခြင်း'
+                : activeSheet === 'docUpload'
+                ? 'စာရွက်စာတမ်း အသစ်တင်ရန် Dialog'
+                : activeSheet === 'orderSuccess'
+                ? 'Order အတည်ပြုချက် Dialog'
+                : activeSheet === 'driveConfig'
+                ? 'Google Drive ဆက်တင် Dialog'
+                : 'Modal dialog'
+            }
           >
             <div className="handle" />
 

@@ -30,6 +30,9 @@ export default defineConfig(() => {
             if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
               return 'vendor-react';
             }
+            if (id.includes('node_modules/@supabase')) {
+              return 'vendor-supabase';
+            }
           },
           // Standard asset naming convention for Cloudflare Pages static caching
           entryFileNames: 'assets/[name]-[hash].js',
