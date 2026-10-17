@@ -1,48 +1,67 @@
 /**
  * ==============================================================================
  * THAISAR — Thai Language School
- * Google Apps Script for Google Drive Payment Screenshot Uploads
+ * Google Apps Script Backend (Code.gs)
+ * Automatically records orders to Google Sheet & saves screenshots to Google Drive
  * ==============================================================================
  * 
- * SETUP INSTRUCTIONS:
- * 1. Open Google Drive (drive.google.com).
- * 2. Create a folder where you want to store payment screenshots (e.g. "THAISAR_Payment_Slips").
- * 3. Open that folder and copy the Folder ID from the browser URL:
- *    https://drive.google.com/drive/folders/1abcXYZ_EXAMPLE_FOLDER_ID
- *    (Paste your folder ID into DEFAULT_FOLDER_ID below or pass it from your app).
- * 4. Go to script.google.com -> Click "+ New project".
- * 5. Replace all code in "Code.gs" with this entire script.
- * 6. Click "Deploy" (top right button) -> "New deployment".
- * 7. Click gear icon (Select type) -> choose "Web app".
- * 8. Set settings:
- *    - Description: "THAISAR Payment Screenshot Upload API"
- *    - Execute as: "Me" (your Google account)
- *    - Who has access: "Anyone"  <-- CRITICAL! Must be "Anyone" so student uploads work without Google login!
- * 9. Click "Deploy" -> Review Permissions -> Advanced -> Go to ... (unsafe) -> Allow.
- * 10. Copy the Web App URL (starts with https://script.google.com/macros/s/.../exec).
- * 11. In your app's .env file or Settings modal, set:
- *     VITE_GOOGLE_DRIVE_UPLOAD_URL="https://script.google.com/macros/s/.../exec"
- *     VITE_GOOGLE_DRIVE_FOLDER_ID="your_folder_id_here"
+ * QUICK SETUP GUIDE:
+ * ------------------------------------------------------------------------------
+ * 1. Open Google Sheets (sheets.google.com) and create a new Spreadsheet:
+ *    - Name it: "THAISAR_Student_Orders"
+ *    - Copy the SPREADSHEET_ID from the browser URL:
+ *      https://docs.google.com/spreadsheets/d/1AbC...XYZ_YOUR_SHEET_ID/edit
+ *    - Paste it into SPREADSHEET_ID below.
+ * 
+ * 2. Open Google Drive (drive.google.com) and create a folder for slips:
+ *    - Name it: "THAISAR_Payment_Slips"
+ *    - Open folder and copy the DRIVE_FOLDER_ID from the browser URL:
+ *      https://drive.google.com/drive/folders/1AbC...XYZ_YOUR_FOLDER_ID
+ *    - Paste it into DRIVE_FOLDER_ID below.
+ * 
+ * 3. In your Google Sheet, click:
+ *    Extensions (တိုးချဲ့ချက်များ) -> Apps Script
+ *    - Delete any existing code in Code.gs.
+ *    - Paste this entire file contents into Code.gs.
+ * 
+ * 4. Click "Deploy" (အပေါ်ညာဘက်ခလုတ်) -> "New deployment" (ဖြန့်ကျက်မှုအသစ်):
+ *    - Click gear icon next to "Select type" -> Select "Web app".
+ *    - Description: "THAISAR Order & Slip API"
+ *    - Execute as: "Me" (သင့်အကောင့်)
+ *    - Who has access: "Anyone" (မည်သူမဆို - အရေးကြီးပါသည်! Login မလိုဘဲပို့နိုင်ရန်)
+ * 
+ * 5. Click "Deploy" -> Review Permissions -> Advanced -> Go to ... (unsafe) -> Allow.
+ * 
+ * 6. Copy the generated Web App URL:
+ *    (e.g. https://script.google.com/macros/s/AKfycb.../exec)
+ * 
+ * 7. In your app's .env file or Settings modal, paste:
+ *    VITE_GOOGLE_APPS_SCRIPT_URL="https://script.google.com/macros/s/AKfycb.../exec"
+ *    VITE_GOOGLE_DRIVE_FOLDER_ID="your_folder_id"
  * ==============================================================================
  */
 
-// Replace with your Google Drive Folder ID (optional fallback if not sent in request)
-var DEFAULT_FOLDER_ID = "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE";
+// 1. CONFIGURATION PLACEHOLDERS
+var SPREADSHEET_ID = "YOUR_SPREADSHEET_ID_HERE";       // e.g. "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+var SHEET_NAME = "Orders";                             // e.g. "Orders" or "သင်တန်းအပ်နှံမှုများ"
+var DRIVE_FOLDER_ID = "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE"; // e.g. "1a2b3c4d5e6f7g8h9i0j"
 
 /**
- * Handles GET requests (for testing and connectivity verification)
+ * Handles GET requests (Verification & Health Check)
  */
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    service: "THAISAR Google Drive Upload API",
+    service: "THAISAR Order & Google Drive Slip API",
     timestamp: new Date().toISOString(),
-    message: "Web App endpoint is active and ready to receive POST image uploads."
+    spreadsheetConfigured: SPREADSHEET_ID !== "YOUR_SPREADSHEET_ID_HERE",
+    driveFolderConfigured: DRIVE_FOLDER_ID !== "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE",
+    message: "Web App endpoint is active and ready to receive POST order & slip submissions."
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
- * Handles POST requests containing base64 screenshot data
+ * Handles POST requests containing order payload and payment screenshot
  */
 function doPost(e) {
   try {
@@ -57,97 +76,147 @@ function doPost(e) {
     try {
       data = JSON.parse(e.postData.contents);
     } catch (parseErr) {
-      // Fallback for form-urlencoded or parameter parsing
       data = e.parameter || {};
     }
 
-    var base64String = data.base64 || data.image || data.file;
-    if (!base64String) {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "error",
-        message: "Missing 'base64' image data in request payload."
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
+    // 1. Extract Order & Customer Fields
+    var timestamp = data.timestamp || new Date().toISOString();
+    var customerName = data.customerName || data.name || "Customer";
+    var phone = data.phone || data.customerPhone || "";
+    var courseOrProduct = data.courseOrProduct || data.label || data.course || "Course";
+    var paymentMethod = data.paymentMethod || data.payment || "KBZPay";
+    var amount = data.amount || (data.total ? (data.total + " MMK") : "-");
+    var orderId = data.orderId || ("THS-" + Utilities.formatDate(new Date(), "GMT+6:30", "yyMMddHHmmss"));
 
-    // Clean base64 header if present (e.g. data:image/png;base64,...)
-    var cleanBase64 = base64String.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
-    
-    // Determine MIME type and file extension
-    var mimeType = data.mimeType || "image/jpeg";
-    var ext = "jpg";
-    if (mimeType.indexOf("png") !== -1) {
-      ext = "png";
-    } else if (mimeType.indexOf("webp") !== -1) {
-      ext = "webp";
-    }
+    // 2. Extract Base64 Image
+    var base64String = data.fileBase64 || data.base64 || data.image || data.file || "";
+    var fileName = data.fileName || ("Slip_" + orderId + "_" + customerName.replace(/[^a-zA-Z0-9_-]/g, "_") + ".jpg");
+    var mimeType = data.fileMimeType || data.mimeType || "image/jpeg";
+    var folderId = data.folderId || DRIVE_FOLDER_ID;
 
-    // Determine file name
-    var orderId = data.orderId || ("ORD-" + new Date().getTime());
-    var customerName = (data.customerName || "Customer").replace(/[\/\\?%*:|"<>]/g, "_");
-    var customerPhone = data.customerPhone || "";
-    var timestamp = Utilities.formatDate(new Date(), "GMT+6:30", "yyyyMMdd-HHmmss");
-    
-    var fileName = data.fileName || ("Slip_" + orderId + "_" + customerName + "_" + timestamp + "." + ext);
+    var fileUrl = "";
+    var fileId = "";
 
-    // Target folder
-    var folderId = data.folderId || DEFAULT_FOLDER_ID;
-    var targetFolder;
-    try {
-      if (folderId && folderId !== "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE") {
-        targetFolder = DriveApp.getFolderById(folderId);
-      } else {
+    // 3. Save Screenshot to Google Drive (if provided)
+    if (base64String) {
+      var cleanBase64 = base64String.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
+      
+      var targetFolder;
+      try {
+        if (folderId && folderId !== "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE") {
+          targetFolder = DriveApp.getFolderById(folderId);
+        } else {
+          targetFolder = DriveApp.getRootFolder();
+        }
+      } catch (errFolder) {
         targetFolder = DriveApp.getRootFolder();
       }
-    } catch (folderErr) {
-      // Fallback to root folder if folder ID not found or permission issue
-      targetFolder = DriveApp.getRootFolder();
+
+      var decodedBytes = Utilities.base64Decode(cleanBase64);
+      var blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
+      var driveFile = targetFolder.createFile(blob);
+
+      // Metadata description
+      driveFile.setDescription(
+        "THAISAR Student Payment Slip\n" +
+        "Order ID: " + orderId + "\n" +
+        "Customer: " + customerName + "\n" +
+        "Phone: " + phone + "\n" +
+        "Course/Item: " + courseOrProduct + "\n" +
+        "Amount: " + amount + "\n" +
+        "Date: " + timestamp
+      );
+
+      // Set sharing so admin and student can view
+      try {
+        driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {
+        // Continue if domain restricts public sharing
+      }
+
+      fileId = driveFile.getId();
+      fileUrl = driveFile.getUrl();
     }
 
-    // Decode base64 to Blob
-    var decodedBytes = Utilities.base64Decode(cleanBase64);
-    var blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
+    // 4. Record to Google Sheet
+    var targetSpreadsheetId = data.spreadsheetId || SPREADSHEET_ID;
+    var targetSheetName = data.sheetName || SHEET_NAME;
+    var sheetRecorded = false;
 
-    // Create file in the specified Drive folder
-    var driveFile = targetFolder.createFile(blob);
-    
-    // Add descriptive metadata
-    var description = "THAISAR Payment Screenshot\n" +
-                      "Order ID: " + orderId + "\n" +
-                      "Customer: " + customerName + "\n" +
-                      "Phone: " + customerPhone + "\n" +
-                      "Uploaded At: " + new Date().toISOString();
-    driveFile.setDescription(description);
+    if (targetSpreadsheetId && targetSpreadsheetId !== "YOUR_SPREADSHEET_ID_HERE") {
+      try {
+        var ss = SpreadsheetApp.openById(targetSpreadsheetId);
+        var sheet = ss.getSheetByName(targetSheetName);
 
-    // Make viewable by anyone with link so admin & student can preview
-    try {
-      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch (sharingErr) {
-      // Ignore sharing error if domain restricted
+        if (!sheet) {
+          sheet = ss.insertSheet(targetSheetName);
+        }
+
+        // Add headers if sheet is newly created or empty
+        if (sheet.getLastRow() === 0) {
+          var headers = [
+            "Date/Time",
+            "Order ID",
+            "Customer Name",
+            "Phone",
+            "Course / Product",
+            "Payment Method",
+            "Amount",
+            "Screenshot Link",
+            "Status"
+          ];
+          sheet.appendRow(headers);
+
+          // Style header row
+          var headerRange = sheet.getRange(1, 1, 1, headers.length);
+          headerRange.setBackground("#4F46E5");
+          headerRange.setFontColor("#FFFFFF");
+          headerRange.setFontWeight("bold");
+          sheet.setFrozenRows(1);
+        }
+
+        // Format Date nicely in Myanmar Time (GMT+6:30)
+        var formattedDate = Utilities.formatDate(new Date(), "GMT+6:30", "yyyy-MM-dd HH:mm:ss");
+
+        // Format hyperlink formula if file URL exists
+        var linkCell = fileUrl ? '=HYPERLINK("' + fileUrl + '", "View Slip")' : "No Slip";
+
+        var newRow = [
+          formattedDate,
+          orderId,
+          customerName,
+          phone,
+          courseOrProduct,
+          paymentMethod,
+          amount,
+          linkCell,
+          "Pending Verification"
+        ];
+
+        sheet.appendRow(newRow);
+        sheetRecorded = true;
+      } catch (sheetErr) {
+        Logger.log("Sheet record error: " + sheetErr.toString());
+      }
     }
 
-    var fileId = driveFile.getId();
-    var fileUrl = driveFile.getUrl();
-    var downloadUrl = driveFile.getDownloadUrl();
-
-    // Return success response
+    // 5. Response JSON
     var response = {
       status: "success",
-      fileId: fileId,
-      fileUrl: fileUrl,
-      downloadUrl: downloadUrl,
-      fileName: fileName,
+      message: "Order recorded successfully",
       orderId: orderId,
-      folderName: targetFolder.getName(),
-      message: "Payment screenshot saved successfully to Google Drive."
+      fileUrl: fileUrl,
+      fileId: fileId,
+      sheetRecorded: sheetRecorded
     };
 
     return ContentService.createTextOutput(JSON.stringify(response))
       .setMimeType(ContentService.MimeType.JSON);
 
-  } catch (err) {
+  } catch (globalErr) {
     var errorResponse = {
       status: "error",
-      message: err.toString()
+      message: globalErr.toString()
     };
     return ContentService.createTextOutput(JSON.stringify(errorResponse))
       .setMimeType(ContentService.MimeType.JSON);

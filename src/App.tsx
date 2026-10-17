@@ -32,7 +32,10 @@ import {
 
 const STORE_KEY = 'thaisar-mobile-demo-v11-docs';
 
-const ENV_DRIVE_UPLOAD_URL = (import.meta.env.VITE_GOOGLE_DRIVE_UPLOAD_URL as string) || '';
+const ENV_DRIVE_UPLOAD_URL =
+  (import.meta.env.VITE_GOOGLE_APPS_SCRIPT_URL as string) ||
+  (import.meta.env.VITE_GOOGLE_DRIVE_UPLOAD_URL as string) ||
+  '';
 const ENV_DRIVE_FOLDER_ID = (import.meta.env.VITE_GOOGLE_DRIVE_FOLDER_ID as string) || '';
 
 interface PersistData {
@@ -388,17 +391,25 @@ export default function App() {
       }
 
       setIsUploading(true);
-      setUploadStatusText('စလစ်ပုံ Google Drive သို့ ပို့နေပါသည်... / Uploading screenshot...');
+      setUploadStatusText('အော်ဒါနှင့် ငွေလွှဲစလစ် ပေးပို့နေပါသည်... / Submitting order & slip...');
 
       if (effectiveUploadUrl) {
         try {
           const payload = {
-            base64: base64Data,
-            fileName: receiptName || `slip-${orderId}.jpg`,
-            mimeType: receiptFile?.type || 'image/jpeg',
+            timestamp: new Date().toISOString(),
             customerName: checkoutKind === 'course' ? enrollName.trim() : persist.displayName,
-            customerPhone: customerPhone.trim(),
+            phone: customerPhone.trim(),
+            courseOrProduct: label,
+            paymentMethod: payment,
+            amount: `${total.toLocaleString('en-US')} ကျပ်`,
+            fileName: receiptName || `slip-${orderId}.jpg`,
+            fileMimeType: receiptFile?.type || 'image/jpeg',
+            fileBase64: base64Data,
+            // Compatibility & helper fields for Google Apps Script
             orderId: orderId,
+            base64: base64Data,
+            mimeType: receiptFile?.type || 'image/jpeg',
+            customerPhone: customerPhone.trim(),
             folderId: effectiveFolderId || undefined,
           };
 
@@ -424,7 +435,7 @@ export default function App() {
         } catch (uploadErr: any) {
           setIsUploading(false);
           const errDetail = uploadErr?.message || 'Network / Apps Script Error';
-          notify(`Google Drive သို့ စလစ်ပုံ ပို့၍ မရပါ (${errDetail})။ ကျေးဇူးပြု၍ ပြန်လည်စမ်းသပ်ပါ။`);
+          notify(`အော်ဒါနှင့် စလစ်ပုံ ပေးပို့၍ မရပါ (${errDetail})။ ကျေးဇူးပြု၍ ပြန်လည်စမ်းသပ်ပါ။`);
           return;
         }
       } else {
@@ -511,7 +522,7 @@ export default function App() {
     notify(
       isCash
         ? 'Admin ဆက်သွယ်ရန် Order တင်ပြီးပါပြီ။'
-        : 'Order တင်ခြင်းနှင့် Google Drive သို့ စလစ်ပုံ ပို့ဆောင်မှု အောင်မြင်ပါသည်!'
+        : 'အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်! Google Sheet နှင့် Google Drive သို့ မှတ်တမ်းတင်ပြီးပါပြီ။'
     );
   };
 
