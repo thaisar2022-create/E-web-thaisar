@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Bun lockfiles
+bun.lock
+bun.lockb
