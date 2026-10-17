@@ -553,8 +553,8 @@ export default function App() {
       if (isSupabaseConfigured && supabase && receiptFile) {
         try {
           setUploadStatusText('စလစ်ပုံ Supabase Cloud သို့ သိမ်းဆည်းနေပါသည်... / Uploading to Supabase Storage...');
-          const cleanName = receiptFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const storagePath = `slips/${orderId}-${cleanName}`;
+          const ext = receiptFile.name.split('.').pop() || 'jpg';
+          const storagePath = `slips/${orderId}-${Date.now()}.${ext}`;
           const { data: uploadData, error: uploadErr } = await supabase.storage
             .from(SUPABASE_STORAGE_BUCKET)
             .upload(storagePath, receiptFile, {
@@ -811,6 +811,17 @@ export default function App() {
       });
       return { ...prev, orders: updated };
     });
+
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('orders')
+        .update({ status: 'approved' })
+        .eq('id', orderId)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase update order status warning:', error.message);
+        });
+    }
+
     notify(`Demo: Order approved! Membership status updated.`);
   };
 
@@ -1993,15 +2004,21 @@ export default function App() {
                           : 'Running in Local Storage demo mode'
                       }
                     >
-                      <span
-                        style={{
-                          width: '6px',
-                          height: '6px',
-                          borderRadius: '50%',
-                          backgroundColor: isSupabaseConfigured ? '#10b981' : '#94a3b8',
-                        }}
-                      />
-                      {isSupabaseConfigured ? 'Supabase Cloud Connected' : 'Local Demo Mode'}
+                      {isSupabaseConfigured ? (
+                        <>🟢 Supabase Cloud Connected</>
+                      ) : (
+                        <>
+                          <span
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              backgroundColor: '#94a3b8',
+                            }}
+                          />
+                          Local Demo Mode
+                        </>
+                      )}
                     </span>
                   </div>
                   <div className="tiny">Member ID: THM-DEMO-0001</div>

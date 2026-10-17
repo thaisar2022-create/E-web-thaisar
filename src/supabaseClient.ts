@@ -6,14 +6,15 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const FALLBACK_URL = 'https://xqxdcijfyayssdasvpxs.supabase.co';
+const FALLBACK_KEY = 'sb_publishable_kZu0InZrXRrvuFBCH9IqvQ_fT9DtxTN';
 
 export const SUPABASE_URL: string =
   (import.meta.env.VITE_SUPABASE_URL as string) || FALLBACK_URL;
 
 export const SUPABASE_ANON_KEY: string =
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || FALLBACK_KEY;
 
-// Configured if anon key is present and not a dummy placeholder
+// Configured if anon key is present and valid
 export const isSupabaseConfigured: boolean = Boolean(
   SUPABASE_ANON_KEY &&
     SUPABASE_ANON_KEY.trim().length > 10 &&
@@ -30,11 +31,11 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
 
 export const SUPABASE_STORAGE_BUCKET = 'thaisar-uploads';
 
-const CLIENT_ID_STORAGE_KEY = 'thaisar_supabase_client_id';
+const CLIENT_ID_STORAGE_KEY = 'thaisar-client-id';
 
 /**
- * Returns a persistent unique client ID stored in localStorage so guest users
- * can sync their profile, documents, and orders without requiring complex login.
+ * Returns a persistent unique client ID stored in localStorage ('thaisar-client-id')
+ * so guest users can sync their profile, documents, and orders without requiring complex login.
  */
 export function getOrCreateClientId(): string {
   try {
