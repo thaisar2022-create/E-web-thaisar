@@ -83,13 +83,15 @@ function doPost(e) {
     var timestamp = data.timestamp || new Date().toISOString();
     var customerName = data.customerName || data.name || "Customer";
     var phone = data.phone || data.customerPhone || "";
+    var deliveryAddress = data.deliveryAddress || data.address || "";
     var courseOrProduct = data.courseOrProduct || data.label || data.course || "Course";
     var paymentMethod = data.paymentMethod || data.payment || "KBZPay";
     var amount = data.amount || (data.total ? (data.total + " MMK") : "-");
     var orderId = data.orderId || ("THS-" + Utilities.formatDate(new Date(), "GMT+6:30", "yyMMddHHmmss"));
 
-    // 2. Extract Base64 Image
-    var base64String = data.fileBase64 || data.base64 || data.image || data.file || "";
+    // 2. Extract Base64 Image (Optional for Cash on Delivery)
+    var rawBase64 = data.fileBase64 || data.base64 || data.image || data.file || "";
+    var base64String = (typeof rawBase64 === "string" && rawBase64.trim() !== "" && rawBase64 !== "null") ? rawBase64 : "";
     var fileName = data.fileName || ("Slip_" + orderId + "_" + customerName.replace(/[^a-zA-Z0-9_-]/g, "_") + ".jpg");
     var mimeType = data.fileMimeType || data.mimeType || "image/jpeg";
     var folderId = data.folderId || DRIVE_FOLDER_ID;
@@ -98,44 +100,50 @@ function doPost(e) {
     var fileId = "";
 
     // 3. Save Screenshot to Google Drive (if provided)
-    if (base64String) {
-      var cleanBase64 = base64String.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
-      
-      var targetFolder;
+    if (base64String && base64String.length > 50) {
       try {
-        if (folderId && folderId !== "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE") {
-          targetFolder = DriveApp.getFolderById(folderId);
-        } else {
+        var cleanBase64 = base64String.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
+        
+        var targetFolder;
+        try {
+          if (folderId && folderId !== "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE") {
+            targetFolder = DriveApp.getFolderById(folderId);
+          } else {
+            targetFolder = DriveApp.getRootFolder();
+          }
+        } catch (errFolder) {
           targetFolder = DriveApp.getRootFolder();
         }
-      } catch (errFolder) {
-        targetFolder = DriveApp.getRootFolder();
+
+        var decodedBytes = Utilities.base64Decode(cleanBase64);
+        var blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
+        var driveFile = targetFolder.createFile(blob);
+
+        // Metadata description
+        driveFile.setDescription(
+          "THAISAR Student Payment Slip\n" +
+          "Order ID: " + orderId + "\n" +
+          "Customer: " + customerName + "\n" +
+          "Phone: " + phone + "\n" +
+          (deliveryAddress ? ("Address: " + deliveryAddress + "\n") : "") +
+          "Course/Item: " + courseOrProduct + "\n" +
+          "Payment Method: " + paymentMethod + "\n" +
+          "Amount: " + amount + "\n" +
+          "Date: " + timestamp
+        );
+
+        // Set sharing so admin and student can view
+        try {
+          driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        } catch (shareErr) {
+          // Continue if domain restricts public sharing
+        }
+
+        fileId = driveFile.getId();
+        fileUrl = driveFile.getUrl();
+      } catch (driveErr) {
+        Logger.log("Drive file creation notice: " + driveErr.toString());
       }
-
-      var decodedBytes = Utilities.base64Decode(cleanBase64);
-      var blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
-      var driveFile = targetFolder.createFile(blob);
-
-      // Metadata description
-      driveFile.setDescription(
-        "THAISAR Student Payment Slip\n" +
-        "Order ID: " + orderId + "\n" +
-        "Customer: " + customerName + "\n" +
-        "Phone: " + phone + "\n" +
-        "Course/Item: " + courseOrProduct + "\n" +
-        "Amount: " + amount + "\n" +
-        "Date: " + timestamp
-      );
-
-      // Set sharing so admin and student can view
-      try {
-        driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (shareErr) {
-        // Continue if domain restricts public sharing
-      }
-
-      fileId = driveFile.getId();
-      fileUrl = driveFile.getUrl();
     }
 
     // 4. Record to Google Sheet
@@ -159,6 +167,7 @@ function doPost(e) {
             "Order ID",
             "Customer Name",
             "Phone",
+            "Delivery Address",
             "Course / Product",
             "Payment Method",
             "Amount",
@@ -179,19 +188,38 @@ function doPost(e) {
         var formattedDate = Utilities.formatDate(new Date(), "GMT+6:30", "yyyy-MM-dd HH:mm:ss");
 
         // Format hyperlink formula if file URL exists
-        var linkCell = fileUrl ? '=HYPERLINK("' + fileUrl + '", "View Slip")' : "No Slip";
+        var linkCell = fileUrl
+          ? '=HYPERLINK("' + fileUrl + '", "View Slip")'
+          : (paymentMethod === "Cash on Delivery" ? "Cash on Delivery (No Slip)" : "No Slip");
 
-        var newRow = [
-          formattedDate,
-          orderId,
-          customerName,
-          phone,
-          courseOrProduct,
-          paymentMethod,
-          amount,
-          linkCell,
-          "Pending Verification"
-        ];
+        var colCount = sheet.getLastColumn();
+        var newRow;
+        if (colCount >= 10 || sheet.getLastRow() === 1) {
+          newRow = [
+            formattedDate,
+            orderId,
+            customerName,
+            phone,
+            deliveryAddress || "-",
+            courseOrProduct,
+            paymentMethod,
+            amount,
+            linkCell,
+            "Pending Verification"
+          ];
+        } else {
+          newRow = [
+            formattedDate,
+            orderId,
+            customerName + (deliveryAddress ? " (" + deliveryAddress + ")" : ""),
+            phone,
+            courseOrProduct,
+            paymentMethod,
+            amount,
+            linkCell,
+            "Pending Verification"
+          ];
+        }
 
         sheet.appendRow(newRow);
         sheetRecorded = true;

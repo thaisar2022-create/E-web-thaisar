@@ -331,7 +331,9 @@ export default function App() {
   const [checkoutStyle, setCheckoutStyle] = useState<ClassStyle>('zoom');
   const [checkoutLevel, setCheckoutLevel] = useState<string>('Level 1 + 2');
   const [enrollName, setEnrollName] = useState('');
+  const [bookCustomerName, setBookCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
   const [phoneSaved, setPhoneSaved] = useState(false);
   const [telegramUsername, setTelegramUsername] = useState('');
   const [addBook, setAddBook] = useState(false);
@@ -341,7 +343,9 @@ export default function App() {
   const [receiptName, setReceiptName] = useState('');
   const [receiptBase64, setReceiptBase64] = useState<string>('');
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string>('');
-  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const isUploading = isSubmitting;
+  const setIsUploading = setIsSubmitting;
   const [uploadStatusText, setUploadStatusText] = useState<string>('');
   const [lastSubmittedOrder, setLastSubmittedOrder] = useState<{
     order: Order;
@@ -421,9 +425,45 @@ export default function App() {
   }, [customerPhone]);
 
   const validEnrollName = checkoutKind !== 'course' || enrollName.trim().length >= 2;
+  const isCourseBookIncluded = checkoutKind === 'course' && addBook;
+
+  // Clear validation lists for Burmese error feedback
+  const courseMissingFields = useMemo(() => {
+    const list: string[] = [];
+    if (!enrollName.trim() || enrollName.trim().length < 2) {
+      list.push('ကျောင်းသား/သူ အမည်အပြည့်အစုံ');
+    }
+    if (!validCustomerPhone) {
+      list.push('ဆက်သွယ်ရန် ဖုန်းနံပါတ် (၈ လုံးမှ ၁၅ လုံး)');
+    }
+    if (isCourseBookIncluded && (!deliveryAddress.trim() || deliveryAddress.trim().length < 5)) {
+      list.push('စာအုပ်ပို့ဆောင်ရန် လိပ်စာအပြည့်အစုံ');
+    }
+    if (!isCash && !receiptFile && !receiptBase64) {
+      list.push(`${payment} ငွေလွှဲစလစ် (Screenshot)`);
+    }
+    return list;
+  }, [enrollName, validCustomerPhone, isCourseBookIncluded, deliveryAddress, isCash, receiptFile, receiptBase64, payment]);
+
+  const bookMissingFields = useMemo(() => {
+    const list: string[] = [];
+    if (!bookCustomerName.trim() || bookCustomerName.trim().length < 2) {
+      list.push('ဝယ်ယူသူ အမည်အပြည့်အစုံ');
+    }
+    if (!validCustomerPhone) {
+      list.push('ဆက်သွယ်ရန် ဖုန်းနံပါတ် (၈ လုံးမှ ၁၅ လုံး)');
+    }
+    if (!deliveryAddress.trim() || deliveryAddress.trim().length < 5) {
+      list.push('စာအုပ်ပို့ဆောင်ရန် လိပ်စာအပြည့်အစုံ');
+    }
+    if (!isCash && !receiptFile && !receiptBase64) {
+      list.push(`${payment} ငွေလွှဲစလစ် (Screenshot)`);
+    }
+    return list;
+  }, [bookCustomerName, validCustomerPhone, deliveryAddress, isCash, receiptFile, receiptBase64, payment]);
 
   const canSubmitOrder =
-    validEnrollName && phoneSaved && validCustomerPhone && (isCash || !!receiptFile || !!receiptBase64);
+    checkoutKind === 'course' ? courseMissingFields.length === 0 : bookMissingFields.length === 0;
 
   // Price calculations
   const calculateCoursePrice = (c: Course, sty: ClassStyle) => {
@@ -451,8 +491,10 @@ export default function App() {
     setCheckoutCourseId('speaking');
     setCheckoutStyle(style);
     setCheckoutLevel('Level 1 + 2');
-    setEnrollName('');
+    setEnrollName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
+    setBookCustomerName(persist.displayName || 'THAISAR Member');
     setCustomerPhone(persist.profile.phone || '');
+    setDeliveryAddress(persist.profile.address || '');
     setPhoneSaved(!!persist.profile.phone);
     setTelegramUsername(persist.profile.telegramPhone ? `@${persist.profile.telegramPhone}` : '');
     setAddBook(false);
@@ -470,8 +512,10 @@ export default function App() {
     setCheckoutCourseId('skills');
     setCheckoutStyle(style);
     setCheckoutLevel(style === 'video' ? 'Level 1' : 'Level 1 + 2');
-    setEnrollName('');
+    setEnrollName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
+    setBookCustomerName(persist.displayName || 'THAISAR Member');
     setCustomerPhone(persist.profile.phone || '');
+    setDeliveryAddress(persist.profile.address || '');
     setPhoneSaved(!!persist.profile.phone);
     setTelegramUsername(persist.profile.telegramPhone ? `@${persist.profile.telegramPhone}` : '');
     setAddBook(false);
@@ -501,7 +545,9 @@ export default function App() {
     setSelectedBookId(bookId);
     setCheckoutKind('book');
     setDelivery('Myanmar');
+    setBookCustomerName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
     setCustomerPhone(persist.profile.phone || '');
+    setDeliveryAddress(persist.profile.address || '');
     setPhoneSaved(!!persist.profile.phone);
     setPayment('KBZPay');
     setReceiptFile(null);
@@ -511,18 +557,11 @@ export default function App() {
     setActiveSheet('bookBuy');
   };
 
-  // Submit Order with Google Drive Screenshot Upload
+  // Submit Order with Google Drive Screenshot Upload & Cash on Delivery handling
   const handleSubmitOrder = async () => {
-    if (!validEnrollName) {
-      notify('ကျောင်းသား/သူ အမည်အပြည့်အစုံ ထည့်ပေးပါ။');
-      return;
-    }
-    if (!validCustomerPhone || !phoneSaved) {
-      notify('Customer ဖုန်းနံပါတ် မှန်ကန်စွာထည့်ပြီး အတည်ပြုပါ။');
-      return;
-    }
-    if (!isCash && !receiptFile && !receiptBase64) {
-      notify('Payment Screenshot (ငွေလွှဲစလစ်ပုံ) ထည့်ပေးပါ။');
+    const missing = checkoutKind === 'course' ? courseMissingFields : bookMissingFields;
+    if (missing.length > 0) {
+      notify(`အချက်အလက်များ မပြည့်စုံသေးပါ: ${missing.join('၊ ')}`);
       return;
     }
 
@@ -538,267 +577,302 @@ export default function App() {
       label = selectedBook.name;
     }
 
-    let uploadedDriveUrl = '';
-    let uploadedDriveId = '';
+    const activeCustomerName =
+      checkoutKind === 'course'
+        ? enrollName.trim()
+        : bookCustomerName.trim() || persist.displayName || 'Customer';
+    const activePhone = customerPhone.trim();
+    const activeAddress = checkoutKind === 'book' || addBook ? deliveryAddress.trim() : '';
 
     const effectiveUploadUrl = (persist.driveUploadUrl || ENV_DRIVE_UPLOAD_URL).trim();
     const effectiveFolderId = (persist.driveFolderId || ENV_DRIVE_FOLDER_ID).trim();
 
-    let supabaseSlipUrl = '';
+    setIsSubmitting(true);
+    setUploadStatusText('Order တင်နေပါသည်...');
 
-    if (!isCash) {
-      setIsUploading(true);
+    try {
+      let uploadedDriveUrl = '';
+      let uploadedDriveId = '';
+      let supabaseSlipUrl = '';
 
-      // 1. Upload receipt to Supabase Storage bucket 'thaisar-uploads'
-      if (isSupabaseConfigured && supabase && receiptFile) {
-        try {
-          setUploadStatusText('စလစ်ပုံ Supabase Cloud သို့ သိမ်းဆည်းနေပါသည်... / Uploading to Supabase Storage...');
-          const ext = receiptFile.name.split('.').pop() || 'jpg';
-          const storagePath = `slips/${orderId}-${Date.now()}.${ext}`;
-          const { data: uploadData, error: uploadErr } = await supabase.storage
-            .from(SUPABASE_STORAGE_BUCKET)
-            .upload(storagePath, receiptFile, {
-              cacheControl: '3600',
-              upsert: true,
-            });
-
-          if (!uploadErr && uploadData) {
-            const { data: publicUrlData } = supabase.storage
+      if (!isCash) {
+        // 1. Upload receipt to Supabase Storage bucket 'thaisar-uploads'
+        if (isSupabaseConfigured && supabase && receiptFile) {
+          try {
+            setUploadStatusText('စလစ်ပုံ Supabase Cloud သို့ သိမ်းဆည်းနေပါသည်...');
+            const ext = receiptFile.name.split('.').pop() || 'jpg';
+            const storagePath = `slips/${orderId}-${Date.now()}.${ext}`;
+            const { data: uploadData, error: uploadErr } = await supabase.storage
               .from(SUPABASE_STORAGE_BUCKET)
-              .getPublicUrl(storagePath);
-            supabaseSlipUrl = publicUrlData?.publicUrl || '';
-          } else if (uploadErr) {
-            console.warn('Supabase Storage notice:', uploadErr.message);
+              .upload(storagePath, receiptFile, {
+                cacheControl: '3600',
+                upsert: true,
+              });
+
+            if (!uploadErr && uploadData) {
+              const { data: publicUrlData } = supabase.storage
+                .from(SUPABASE_STORAGE_BUCKET)
+                .getPublicUrl(storagePath);
+              supabaseSlipUrl = publicUrlData?.publicUrl || '';
+            } else if (uploadErr) {
+              console.warn('Supabase Storage notice:', uploadErr.message);
+            }
+          } catch (storageErr) {
+            console.warn('Supabase storage exception:', storageErr);
           }
-        } catch (storageErr) {
-          console.warn('Supabase storage exception:', storageErr);
         }
-      }
 
-      // Ensure base64 representation is ready for Google Drive / Google Apps Script
-      let base64Data = receiptBase64;
-      if (!base64Data && receiptFile) {
-        try {
-          base64Data = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(receiptFile);
-          });
-          setReceiptBase64(base64Data);
-        } catch {
-          notify('Screenshot ဖိုင်ဖတ်မရပါ။ ပြန်လည်ရွေးချယ်ပေးပါ။');
-          setIsUploading(false);
-          return;
-        }
-      }
-
-      if (!base64Data && !supabaseSlipUrl) {
-        notify('Payment Screenshot (ငွေလွှဲစလစ်ပုံ) ရွေးချယ်ပေးပါ။');
-        setIsUploading(false);
-        return;
-      }
-
-      setUploadStatusText('အော်ဒါနှင့် ငွေလွှဲစလစ် ပေးပို့နေပါသည်... / Submitting order & slip...');
-
-      // 2. Google Apps Script / Drive upload (optional secondary backup or main storage)
-      if (effectiveUploadUrl && base64Data) {
-        try {
-          const payload = {
-            timestamp: new Date().toISOString(),
-            customerName: checkoutKind === 'course' ? enrollName.trim() : persist.displayName,
-            phone: customerPhone.trim(),
-            courseOrProduct: label,
-            paymentMethod: payment,
-            amount: `${total.toLocaleString('en-US')} ကျပ်`,
-            fileName: receiptName || `slip-${orderId}.jpg`,
-            fileMimeType: receiptFile?.type || 'image/jpeg',
-            fileBase64: base64Data,
-            orderId: orderId,
-            base64: base64Data,
-            mimeType: receiptFile?.type || 'image/jpeg',
-            customerPhone: customerPhone.trim(),
-            folderId: effectiveFolderId || undefined,
-            supabaseSlipUrl: supabaseSlipUrl || undefined,
-          };
-
-          const response = await fetch(effectiveUploadUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'text/plain;charset=utf-8',
-            },
-            body: JSON.stringify(payload),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Google Apps Script HTTP Error: ${response.status}`);
-          }
-
-          const resData = await response.json();
-          if (resData.status === 'error') {
-            throw new Error(resData.message || 'Google Apps Script error');
-          }
-
-          uploadedDriveUrl = resData.fileUrl || resData.downloadUrl || '';
-          uploadedDriveId = resData.fileId || '';
-        } catch (uploadErr: any) {
-          if (!supabaseSlipUrl) {
-            setIsUploading(false);
-            const errDetail = uploadErr?.message || 'Network / Apps Script Error';
-            notify(`အော်ဒါနှင့် စလစ်ပုံ ပေးပို့၍ မရပါ (${errDetail})။ ကျေးဇူးပြု၍ ပြန်လည်စမ်းသပ်ပါ။`);
+        // Ensure base64 representation is ready for Google Drive / Google Apps Script
+        let base64Data = receiptBase64;
+        if (!base64Data && receiptFile) {
+          try {
+            base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(receiptFile);
+            });
+            setReceiptBase64(base64Data);
+          } catch {
+            notify('Screenshot ဖိုင်ဖတ်မရပါ။ ပြန်လည်ရွေးချယ်ပေးပါ။');
+            setIsSubmitting(false);
             return;
           }
         }
-      }
 
-      if (!uploadedDriveUrl) {
-        if (supabaseSlipUrl) {
-          uploadedDriveUrl = supabaseSlipUrl;
-          uploadedDriveId = `supa-${orderId}`;
-        } else {
-          // Fallback demo link when neither external upload endpoint is connected
-          await new Promise((resolve) => setTimeout(resolve, 800));
-          uploadedDriveUrl = `https://drive.google.com/file/d/demo-slip-${orderId}/view?usp=sharing`;
-          uploadedDriveId = `demo-slip-${orderId}`;
+        setUploadStatusText('အော်ဒါနှင့် ငွေလွှဲစလစ် ပေးပို့နေပါသည်...');
+
+        // 2. Google Apps Script / Drive upload (optional secondary backup or main storage)
+        if (effectiveUploadUrl && base64Data) {
+          try {
+            const payload = {
+              timestamp: new Date().toISOString(),
+              customerName: activeCustomerName,
+              phone: activePhone,
+              deliveryAddress: activeAddress || undefined,
+              courseOrProduct: label,
+              paymentMethod: payment,
+              amount: `${total.toLocaleString('en-US')} ကျပ်`,
+              fileName: receiptName || `slip-${orderId}.jpg`,
+              fileMimeType: receiptFile?.type || 'image/jpeg',
+              fileBase64: base64Data,
+              orderId: orderId,
+              base64: base64Data,
+              mimeType: receiptFile?.type || 'image/jpeg',
+              customerPhone: activePhone,
+              folderId: effectiveFolderId || undefined,
+              supabaseSlipUrl: supabaseSlipUrl || undefined,
+            };
+
+            const response = await fetch(effectiveUploadUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'text/plain;charset=utf-8',
+              },
+              body: JSON.stringify(payload),
+            });
+
+            if (response.ok) {
+              const resData = await response.json().catch(() => ({}));
+              if (resData.status !== 'error') {
+                uploadedDriveUrl = resData.fileUrl || resData.downloadUrl || '';
+                uploadedDriveId = resData.fileId || '';
+              }
+            }
+          } catch (uploadErr: any) {
+            console.warn('Apps Script upload notice:', uploadErr);
+          }
+        }
+
+        if (!uploadedDriveUrl) {
+          if (supabaseSlipUrl) {
+            uploadedDriveUrl = supabaseSlipUrl;
+            uploadedDriveId = `supa-${orderId}`;
+          } else {
+            // Fallback demo link when neither external upload endpoint is connected
+            uploadedDriveUrl = `https://drive.google.com/file/d/demo-slip-${orderId}/view?usp=sharing`;
+            uploadedDriveId = `demo-slip-${orderId}`;
+          }
+        }
+      } else {
+        // Cash on Delivery: bypass screenshot upload and sync to Apps Script if configured
+        if (effectiveUploadUrl) {
+          try {
+            setUploadStatusText('Order အချက်အလက်များ ပေးပို့နေပါသည်...');
+            const codPayload = {
+              timestamp: new Date().toISOString(),
+              customerName: activeCustomerName,
+              phone: activePhone,
+              deliveryAddress: activeAddress || undefined,
+              courseOrProduct: label,
+              paymentMethod: payment,
+              amount: `${total.toLocaleString('en-US')} ကျပ်`,
+              fileName: '',
+              fileMimeType: '',
+              fileBase64: '',
+              orderId: orderId,
+              customerPhone: activePhone,
+              folderId: effectiveFolderId || undefined,
+              supabaseSlipUrl: undefined,
+            };
+            await fetch(effectiveUploadUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'text/plain;charset=utf-8',
+              },
+              body: JSON.stringify(codPayload),
+            }).catch(() => null);
+          } catch (codErr) {
+            console.warn('COD Apps Script notice:', codErr);
+          }
         }
       }
-      setIsUploading(false);
-    }
 
-    // Automatically create a linked document for this order
-    const newDocId = `DOC-ORD-${Date.now().toString(36).toUpperCase()}`;
-    const generatedDoc: AppDocument = {
-      id: newDocId,
-      title: `${label} ငွေလွှဲပြေစာနှင့် မှတ်ပုံတင်မှတ်တမ်း`,
-      englishTitle: `Payment Voucher & Registration Receipt (${orderId})`,
-      category: 'receipts',
-      fileType: 'PDF',
-      fileSize: '380 KB',
-      updatedAt: new Date().toISOString().split('T')[0],
-      courseId: checkoutKind === 'course' ? checkoutCourseId : 'book',
-      orderId: orderId,
-      driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
-      description: `Order ${orderId} အတွက် THAISAR တရားဝင် ငွေလွှဲပြေစာနှင့် သင်တန်းအပ်နှံမှု အတည်ပြုလွှာ။`,
-      downloadCount: 1,
-      isSystemDoc: false,
-      pagesCount: 1,
-      contentPreview: [
-        `ကျောင်းသားအမည်: ${enrollName || persist.displayName}`,
-        `အော်ဒါအမှတ်: ${orderId}`,
-        `သင်တန်း/စာအုပ်: ${label}`,
-        `ပေးချေမှုပုံစံ: ${payment} (${isCash ? 'Admin ဆက်သွယ်မည်' : 'ငွေလွှဲပြီး'})`,
-        `စုစုပေါင်း ကျသင့်ငွေ: ${total.toLocaleString('en-US')} MMK`,
-        `ဆက်သွယ်ရန်ဖုန်း: ${customerPhone}`,
-        uploadedDriveUrl ? `ငွေလွှဲစလစ်လင့်ခ်: ${uploadedDriveUrl}` : '',
-        `မှတ်ချက်: Admin စစ်ဆေးအတည်ပြုပြီးပါက တရားဝင် ပြေစာအဖြစ် အကျုံးဝင်ပါသည်။`,
-      ].filter(Boolean),
-    };
+      // Automatically create a linked document for this order
+      const newDocId = `DOC-ORD-${Date.now().toString(36).toUpperCase()}`;
+      const generatedDoc: AppDocument = {
+        id: newDocId,
+        title: `${label} ${isCash ? 'Order အတည်ပြုလွှာ' : 'ငွေလွှဲပြေစာနှင့် မှတ်ပုံတင်မှတ်တမ်း'}`,
+        englishTitle: `${isCash ? 'Cash on Delivery Voucher' : 'Payment Voucher & Registration Receipt'} (${orderId})`,
+        category: 'receipts',
+        fileType: 'PDF',
+        fileSize: '380 KB',
+        updatedAt: new Date().toISOString().split('T')[0],
+        courseId: checkoutKind === 'course' ? checkoutCourseId : 'book',
+        orderId: orderId,
+        driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
+        description: `Order ${orderId} အတွက် THAISAR တရားဝင် ${isCash ? 'Order အတည်ပြုလွှာ' : 'ငွေလွှဲပြေစာ'}။`,
+        downloadCount: 1,
+        isSystemDoc: false,
+        pagesCount: 1,
+        contentPreview: [
+          `ကျောင်းသား/ဝယ်ယူသူ: ${activeCustomerName}`,
+          `အော်ဒါအမှတ်: ${orderId}`,
+          `သင်တန်း/စာအုပ်: ${label}`,
+          `ပေးချေမှုပုံစံ: ${payment} (${isCash ? 'Admin ဆက်သွယ်မည်' : 'ငွေလွှဲပြီး'})`,
+          `စုစုပေါင်း ကျသင့်ငွေ: ${total.toLocaleString('en-US')} MMK`,
+          `ဆက်သွယ်ရန်ဖုန်း: ${activePhone}`,
+          activeAddress ? `ပို့ဆောင်ရန်လိပ်စာ: ${activeAddress}` : '',
+          uploadedDriveUrl ? `ငွေလွှဲစလစ်လင့်ခ်: ${uploadedDriveUrl}` : '',
+          `မှတ်ချက်: Admin စစ်ဆေးဆက်သွယ်ပြီးပါက တရားဝင် ပြေစာအဖြစ် အကျုံးဝင်ပါသည်။`,
+        ].filter(Boolean),
+      };
 
-    const newOrder: Order = {
-      id: orderId,
-      kind: checkoutKind,
-      itemId: checkoutKind === 'course' ? selectedCourse.id : selectedBook.id,
-      label,
-      status: 'pending',
-      currency: 'MMK',
-      total,
-      bookIncluded: checkoutKind === 'course' && addBook,
-      bookPrice: bookAddPrice,
-      delivery: checkoutKind === 'book' || addBook ? delivery : null,
-      payment,
-      studentName: checkoutKind === 'course' ? enrollName.trim() : null,
-      telegramUsername: checkoutKind === 'course' ? telegramUsername.trim() : null,
-      customerPhone: customerPhone.trim(),
-      createdAt: new Date().toLocaleDateString('en-GB'),
-      receiptFileName: isCash ? '' : (receiptName || (receiptFile ? receiptFile.name : '')),
-      driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
-      driveFileId: uploadedDriveId || undefined,
-      documentId: newDocId,
-    };
+      const newOrder: Order = {
+        id: orderId,
+        kind: checkoutKind,
+        itemId: checkoutKind === 'course' ? selectedCourse.id : selectedBook.id,
+        label,
+        status: 'pending',
+        currency: 'MMK',
+        total,
+        bookIncluded: checkoutKind === 'course' && addBook,
+        bookPrice: bookAddPrice,
+        delivery: checkoutKind === 'book' || addBook ? delivery : null,
+        payment,
+        studentName: activeCustomerName,
+        telegramUsername: checkoutKind === 'course' ? telegramUsername.trim() : null,
+        customerPhone: activePhone,
+        createdAt: new Date().toLocaleDateString('en-GB'),
+        receiptFileName: isCash ? '' : (receiptName || (receiptFile ? receiptFile.name : '')),
+        driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
+        driveFileId: uploadedDriveId || undefined,
+        documentId: newDocId,
+      };
 
-    // Sync to Supabase tables if configured
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const clientId = getOrCreateClientId();
+      // Sync to Supabase tables if configured
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const clientId = getOrCreateClientId();
 
-        // b) Insert new order into public.orders
-        await supabase.from('orders').insert({
-          id: orderId,
-          client_id: clientId,
-          kind: checkoutKind,
-          item_id: checkoutKind === 'course' ? selectedCourse.id : selectedBook.id,
-          label,
-          status: 'pending',
-          currency: 'MMK',
-          total,
-          book_included: checkoutKind === 'course' && addBook,
-          book_price: bookAddPrice,
-          delivery: checkoutKind === 'book' || addBook ? delivery : null,
-          payment,
-          student_name: checkoutKind === 'course' ? enrollName.trim() : null,
-          telegram_username: checkoutKind === 'course' ? telegramUsername.trim() : null,
-          customer_phone: customerPhone.trim(),
-          created_at: new Date().toISOString(),
-          receipt_file_name: isCash ? '' : (receiptName || (receiptFile ? receiptFile.name : '')),
-          drive_file_url: uploadedDriveUrl || supabaseSlipUrl || null,
-          drive_file_id: uploadedDriveId || null,
-          document_id: newDocId,
-          slip_url: supabaseSlipUrl || null,
-        });
+          // Insert new order into public.orders
+          await supabase.from('orders').insert({
+            id: orderId,
+            client_id: clientId,
+            kind: checkoutKind,
+            item_id: checkoutKind === 'course' ? selectedCourse.id : selectedBook.id,
+            label,
+            status: 'pending',
+            currency: 'MMK',
+            total,
+            book_included: checkoutKind === 'course' && addBook,
+            book_price: bookAddPrice,
+            delivery: checkoutKind === 'book' || addBook ? delivery : null,
+            payment,
+            student_name: activeCustomerName,
+            telegram_username: checkoutKind === 'course' ? telegramUsername.trim() : null,
+            customer_phone: activePhone,
+            created_at: new Date().toISOString(),
+            receipt_file_name: isCash ? '' : (receiptName || (receiptFile ? receiptFile.name : '')),
+            drive_file_url: uploadedDriveUrl || supabaseSlipUrl || null,
+            drive_file_id: uploadedDriveId || null,
+            document_id: newDocId,
+            slip_url: supabaseSlipUrl || null,
+          });
 
-        // Insert generated receipt voucher into public.documents
-        await supabase.from('documents').insert({
-          id: newDocId,
-          client_id: clientId,
-          title: generatedDoc.title,
-          english_title: generatedDoc.englishTitle,
-          category: generatedDoc.category,
-          file_type: generatedDoc.fileType,
-          file_size: generatedDoc.fileSize,
-          updated_at: generatedDoc.updatedAt,
-          course_id: generatedDoc.courseId || null,
-          order_id: generatedDoc.orderId || null,
-          drive_file_url: generatedDoc.driveFileUrl || supabaseSlipUrl || null,
-          description: generatedDoc.description,
-          download_count: 1,
-          is_system_doc: false,
-          pages_count: 1,
-          content_preview: generatedDoc.contentPreview || [],
-        });
-      } catch (dbInsertErr) {
-        console.warn('Supabase insert notice:', dbInsertErr);
+          // Insert generated receipt voucher into public.documents
+          await supabase.from('documents').insert({
+            id: newDocId,
+            client_id: clientId,
+            title: generatedDoc.title,
+            english_title: generatedDoc.englishTitle,
+            category: generatedDoc.category,
+            file_type: generatedDoc.fileType,
+            file_size: generatedDoc.fileSize,
+            updated_at: generatedDoc.updatedAt,
+            course_id: generatedDoc.courseId || null,
+            order_id: generatedDoc.orderId || null,
+            drive_file_url: generatedDoc.driveFileUrl || supabaseSlipUrl || null,
+            description: generatedDoc.description,
+            download_count: 1,
+            is_system_doc: false,
+            pages_count: 1,
+            content_preview: generatedDoc.contentPreview || [],
+          });
+        } catch (dbInsertErr) {
+          console.warn('Supabase insert notice:', dbInsertErr);
+        }
       }
+
+      setPersist((prev) => ({
+        ...prev,
+        orders: [...prev.orders, newOrder],
+        documents: [generatedDoc, ...prev.documents],
+      }));
+
+      setLastSubmittedOrder({
+        order: newOrder,
+        driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
+        docId: newDocId,
+      });
+
+      // Reset receipt file inputs
+      setReceiptFile(null);
+      setReceiptName('');
+      setReceiptBase64('');
+      setReceiptPreviewUrl('');
+
+      // Open confirmation modal
+      setActiveSheet('orderSuccess');
+
+      notify(
+        isCash
+          ? 'Admin ဆက်သွယ်ရန် Order တင်ပြီးပါပြီ။ Admin မှ မကြာမီ ဆက်သွယ်ပေးပါမည်။'
+          : isSupabaseConfigured
+          ? 'အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်! Supabase Cloud သို့ သိမ်းဆည်းပြီးပါပြီ။'
+          : 'အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်! Google Sheet နှင့် Google Drive သို့ မှတ်တမ်းတင်ပြီးပါပြီ။'
+      );
+    } catch (err: any) {
+      console.error('Order submission error:', err);
+      const errMsg = err?.message || 'အင်တာနက်လိုင်း ချိတ်ဆက်မှု မအောင်မြင်ပါ။';
+      notify(`အော်ဒါတင်ရာတွင် အမှားဖြစ်ပေါ်ပါသည် (${errMsg})။ ကျေးဇူးပြု၍ ပြန်လည်ကြိုးစားပါ။`);
+    } finally {
+      setIsSubmitting(false);
+      setUploadStatusText('');
     }
-
-    setPersist((prev) => ({
-      ...prev,
-      orders: [...prev.orders, newOrder],
-      documents: [generatedDoc, ...prev.documents],
-    }));
-
-    setLastSubmittedOrder({
-      order: newOrder,
-      driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
-      docId: newDocId,
-    });
-
-    // Reset receipt file inputs
-    setReceiptFile(null);
-    setReceiptName('');
-    setReceiptBase64('');
-    setReceiptPreviewUrl('');
-
-    // Open confirmation modal
-    setActiveSheet('orderSuccess');
-
-    notify(
-      isCash
-        ? 'Admin ဆက်သွယ်ရန် Order တင်ပြီးပါပြီ။'
-        : isSupabaseConfigured
-        ? 'အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်! Supabase Cloud သို့ သိမ်းဆည်းပြီးပါပြီ။'
-        : 'အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်! Google Sheet နှင့် Google Drive သို့ မှတ်တမ်းတင်ပြီးပါပြီ။'
-    );
   };
+
+  const handleOrderSubmit = handleSubmitOrder;
 
   // Simulate Admin Approval
   const handleApproveOrder = (orderId: string) => {
@@ -2678,8 +2752,10 @@ export default function App() {
                         placeholder="09xxxxxxxxx / +66..."
                         value={customerPhone}
                         onChange={(e) => {
-                          setCustomerPhone(e.target.value);
-                          setPhoneSaved(false);
+                          const val = e.target.value;
+                          setCustomerPhone(val);
+                          const digits = val.replace(/\D/g, '');
+                          setPhoneSaved(digits.length >= 8 && digits.length <= 15);
                         }}
                       />
                       <button
@@ -2698,7 +2774,7 @@ export default function App() {
                       </button>
                     </div>
                     <small>သင်တန်း Admin ဘက်မှ ဒီဖုန်းနံပါတ်ကို ပြန်လည်ဆက်သွယ်ပေးပါမယ်။</small>
-                    {phoneSaved && <span className="pill green">✓ ဖုန်းနံပါတ် အတည်ပြုပြီး</span>}
+                    {(phoneSaved || validCustomerPhone) && <span className="pill green">✓ ဖုန်းနံပါတ် အတည်ပြုပြီး</span>}
                   </div>
 
                   <div className="field">
@@ -2747,7 +2823,7 @@ export default function App() {
                   </div>
 
                   {addBook && (
-                    <div className="field">
+                    <div className="field" style={{ marginTop: '10px' }}>
                       <label>စာအုပ်ပို့ရန် နိုင်ငံ</label>
                       <div className="choice-row">
                         <button
@@ -2768,6 +2844,19 @@ export default function App() {
                       <div className="notice" style={{ marginTop: '8px' }}>
                         📦 စာအုပ်ကို သင်တန်းနဲ့ တစ်ကြိမ်တည်း Order တင်နိုင်ပါတယ်။ ပို့ခကို နောက်မှ Admin
                         တွက်ပြီး သီးခြားတောင်းခံပါမယ်။
+                      </div>
+
+                      <div style={{ marginTop: '10px' }}>
+                        <label htmlFor="courseDeliveryAddress" style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                          🏠 စာအုပ်ပို့ဆောင်ပေးရမည့် လိပ်စာ <span style={{ color: '#bd3b45' }}>*</span>
+                        </label>
+                        <textarea
+                          id="courseDeliveryAddress"
+                          rows={2}
+                          placeholder="အိမ်အမှတ်၊ လမ်း၊ ရပ်ကွက်၊ မြို့နယ်၊ တိုင်း/ပြည်နယ် (သို့) ထိုင်းလိပ်စာ"
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
+                        />
                       </div>
                     </div>
                   )}
@@ -2905,22 +2994,57 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="demo-guard">
-                  🧪 <strong>Order &amp; Drive Upload</strong> — အတည်ပြုခလုတ်နှိပ်ပါက စလစ်ပုံကို Google Drive သို့
-                  ပေးပို့ပြီး Order Voucher နှင့် စာရွက်စာတမ်းကို အလိုအလျောက် ထုတ်ပေးပါမည်။
-                </div>
+                {/* Hide orange notice box when Cash on Delivery is selected */}
+                {!isCash && (
+                  <div className="demo-guard">
+                    🧪 <strong>Order &amp; Drive Upload</strong> — အတည်ပြုခလုတ်နှိပ်ပါက စလစ်ပုံကို Google Drive သို့
+                    ပေးပို့ပြီး Order Voucher နှင့် စာရွက်စာတမ်းကို အလိုအလျောက် ထုတ်ပေးပါမည်။
+                  </div>
+                )}
+
+                {/* Validation Feedback Warning right above button */}
+                {courseMissingFields.length > 0 && (
+                  <div
+                    role="alert"
+                    aria-live="polite"
+                    style={{
+                      backgroundColor: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      marginTop: '12px',
+                      marginBottom: '4px',
+                      fontSize: '12.5px',
+                      color: '#991b1b',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      lineHeight: '1.45',
+                    }}
+                  >
+                    <span style={{ fontSize: '15px', lineHeight: 1 }} aria-hidden="true">⚠️</span>
+                    <div>
+                      <strong style={{ display: 'block', marginBottom: '2px', color: '#7f1d1d' }}>
+                        Order တင်ရန် အောက်ပါအချက်အလက်များ လိုအပ်နေပါသည်:
+                      </strong>
+                      <span style={{ color: '#b91c1c' }}>
+                        {courseMissingFields.join(' · ')}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="button"
                   className="main-btn"
-                  style={{ width: '100%', marginTop: '14px' }}
-                  disabled={!canSubmitOrder || isUploading}
+                  style={{ width: '100%', marginTop: '12px' }}
+                  disabled={courseMissingFields.length > 0 || isSubmitting}
                   onClick={handleSubmitOrder}
                 >
-                  {isUploading ? (
+                  {isSubmitting ? (
                     <>
-                      <span className="spinner"></span>
-                      {uploadStatusText || 'စလစ်ပုံ Google Drive သို့ ပို့နေပါသည်...'}
+                      <span className="spinner" aria-hidden="true"></span>
+                      <span>{uploadStatusText || 'Order တင်နေပါသည်...'}</span>
                     </>
                   ) : isCash ? (
                     'Admin ဆက်သွယ်ရန် Order တင်မည် · ' + mmk(calculateTotals().total)
@@ -2947,6 +3071,20 @@ export default function App() {
                 </div>
                 <p className="subtitle">{selectedBook.name} · Buy Now Checkout</p>
 
+                {/* Customer Name */}
+                <div className="field">
+                  <label htmlFor="bookCustomerName">
+                    👤 ဝယ်ယူသူ အမည် <span style={{ color: '#bd3b45' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="bookCustomerName"
+                    placeholder="သင့်အမည် အပြည့်အစုံ ရိုက်ထည့်ပါ"
+                    value={bookCustomerName}
+                    onChange={(e) => setBookCustomerName(e.target.value)}
+                  />
+                </div>
+
                 <div className="field">
                   <label>စာအုပ်ပို့ရန် နိုင်ငံ</label>
                   <div className="choice-row">
@@ -2968,6 +3106,21 @@ export default function App() {
                   <small>Delivery Fee ကို Admin က နောက်မှတွက်ပြီး သီးခြားတောင်းခံပါမယ်။</small>
                 </div>
 
+                {/* Delivery Address */}
+                <div className="field">
+                  <label htmlFor="bookDeliveryAddress">
+                    🏠 ပို့ဆောင်ပေးရမည့် လိပ်စာအပြည့်အစုံ <span style={{ color: '#bd3b45' }}>*</span>
+                  </label>
+                  <textarea
+                    id="bookDeliveryAddress"
+                    rows={2}
+                    placeholder="အိမ်အမှတ်၊ လမ်း၊ ရပ်ကွက်၊ မြို့နယ်၊ တိုင်း/ပြည်နယ် (သို့) ထိုင်းလိပ်စာ"
+                    value={deliveryAddress}
+                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                  />
+                  <small>စာအုပ်ပို့ဆောင်ရန်အတွက် လိပ်စာအပြည့်အစုံ ရိုက်ထည့်ပေးပါ။</small>
+                </div>
+
                 <div className="field">
                   <label htmlFor="customerPhoneBook">
                     📞 Customer ဆက်သွယ်ရန် ဖုန်းနံပါတ် <span style={{ color: '#bd3b45' }}>*</span>
@@ -2980,8 +3133,10 @@ export default function App() {
                       placeholder="ဥပမာ 09xxxxxxxxx / +66..."
                       value={customerPhone}
                       onChange={(e) => {
-                        setCustomerPhone(e.target.value);
-                        setPhoneSaved(false);
+                        const val = e.target.value;
+                        setCustomerPhone(val);
+                        const digits = val.replace(/\D/g, '');
+                        setPhoneSaved(digits.length >= 8 && digits.length <= 15);
                       }}
                     />
                     <button
@@ -3000,7 +3155,7 @@ export default function App() {
                     </button>
                   </div>
                   <small>Admin ဘက်မှ ဒီဖုန်းနံပါတ်ကို ပြန်လည်ဆက်သွယ်ပေးပါမယ်။</small>
-                  {phoneSaved && <span className="pill green">✓ ဖုန်းနံပါတ် ထည့်ပြီးပါပြီ</span>}
+                  {(phoneSaved || validCustomerPhone) && <span className="pill green">✓ ဖုန်းနံပါတ် ထည့်ပြီးပါပြီ</span>}
                 </div>
 
                 <div className="sum">
@@ -3046,7 +3201,7 @@ export default function App() {
 
                 {isCash ? (
                   <div className="callout-cash">
-                    📞 စာအုပ်ဖိုး ပေးချေခြင်းနှင့် ပို့ဆောင်မှုအစီအစဉ်ကို Admin က ဆက်သွယ်အတည်ပြုပါမယ်။
+                    📞 စာအုပ်ဖိုး ပေးချေခြင်းနှင့် ပို့ဆောင်မှုအစီအစဉ်ကို Admin က ဆက်သွယ်အတည်ပြုပါမယ်။ ဒီနည်းလမ်းရွေးရင် Screenshot မလိုပါ။
                   </div>
                 ) : (
                   <div className="field">
@@ -3113,22 +3268,57 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="demo-guard">
-                  🧪 <strong>Order &amp; Drive Upload</strong> — အတည်ပြုခလုတ်နှိပ်ပါက စလစ်ပုံကို Google Drive သို့
-                  ပေးပို့ပြီး Order Voucher နှင့် စာရွက်စာတမ်းကို အလိုအလျောက် ထုတ်ပေးပါမည်။
-                </div>
+                {/* Hide orange notice box when Cash on Delivery is selected */}
+                {!isCash && (
+                  <div className="demo-guard">
+                    🧪 <strong>Order &amp; Drive Upload</strong> — အတည်ပြုခလုတ်နှိပ်ပါက စလစ်ပုံကို Google Drive သို့
+                    ပေးပို့ပြီး Order Voucher နှင့် စာရွက်စာတမ်းကို အလိုအလျောက် ထုတ်ပေးပါမည်။
+                  </div>
+                )}
+
+                {/* Validation Feedback Warning right above button */}
+                {bookMissingFields.length > 0 && (
+                  <div
+                    role="alert"
+                    aria-live="polite"
+                    style={{
+                      backgroundColor: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      marginTop: '12px',
+                      marginBottom: '4px',
+                      fontSize: '12.5px',
+                      color: '#991b1b',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      lineHeight: '1.45',
+                    }}
+                  >
+                    <span style={{ fontSize: '15px', lineHeight: 1 }} aria-hidden="true">⚠️</span>
+                    <div>
+                      <strong style={{ display: 'block', marginBottom: '2px', color: '#7f1d1d' }}>
+                        Order တင်ရန် အောက်ပါအချက်အလက်များ လိုအပ်နေပါသည်:
+                      </strong>
+                      <span style={{ color: '#b91c1c' }}>
+                        {bookMissingFields.join(' · ')}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="button"
                   className="main-btn"
-                  style={{ width: '100%', marginTop: '14px' }}
-                  disabled={!phoneSaved || !validCustomerPhone || (!isCash && !receiptFile && !receiptBase64) || isUploading}
+                  style={{ width: '100%', marginTop: '12px' }}
+                  disabled={bookMissingFields.length > 0 || isSubmitting}
                   onClick={handleSubmitOrder}
                 >
-                  {isUploading ? (
+                  {isSubmitting ? (
                     <>
-                      <span className="spinner"></span>
-                      {uploadStatusText || 'စလစ်ပုံ Google Drive သို့ ပို့နေပါသည်...'}
+                      <span className="spinner" aria-hidden="true"></span>
+                      <span>{uploadStatusText || 'Order တင်နေပါသည်...'}</span>
                     </>
                   ) : isCash ? (
                     'Admin ဆက်သွယ်ရန် Order တင်မည် · ' + mmk(selectedBook.promo[0]!)

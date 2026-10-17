@@ -787,22 +787,32 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .main-btn {
   border: none;
-  background: var(--purple);
-  color: white;
-  font-size: 12px;
-  font-weight: 900;
+  background: #6d28d9;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
   border-radius: 13px;
   padding: 13px 18px;
-  min-height: 45px;
+  min-height: 46px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.main-btn:hover:not(:disabled) {
+  background: #5b21b6;
 }
 
 .main-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+  background: #d1d5db !important;
+  color: #4b5563 !important;
+  border: 1px solid #9ca3af !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
 }
 
 .outline-btn {
