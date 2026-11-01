@@ -198,6 +198,7 @@ export default function App() {
             delivery: row.delivery || null,
             payment: row.payment || 'KBZPay',
             studentName: row.student_name ?? row.studentName ?? null,
+            enrollerName: row.enroller_name ?? row.enrollerName ?? null,
             telegramUsername: row.telegram_username ?? row.telegramUsername ?? null,
             customerPhone: row.customer_phone ?? row.customerPhone ?? '',
             createdAt: row.created_at
@@ -331,6 +332,7 @@ export default function App() {
   const [checkoutStyle, setCheckoutStyle] = useState<ClassStyle>('zoom');
   const [checkoutLevel, setCheckoutLevel] = useState<string>('Level 1 + 2');
   const [enrollName, setEnrollName] = useState('');
+  const [enrollerName, setEnrollerName] = useState('');
   const [bookCustomerName, setBookCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -425,6 +427,7 @@ export default function App() {
   }, [customerPhone]);
 
   const validEnrollName = checkoutKind !== 'course' || enrollName.trim().length >= 2;
+  const validEnrollerName = enrollerName.trim().length >= 2;
   const isCourseBookIncluded = checkoutKind === 'course' && addBook;
 
   // Clear validation lists for Burmese error feedback
@@ -432,6 +435,9 @@ export default function App() {
     const list: string[] = [];
     if (!enrollName.trim() || enrollName.trim().length < 2) {
       list.push('ကျောင်းသား/သူ အမည်အပြည့်အစုံ');
+    }
+    if (!validEnrollerName) {
+      list.push('သင်တန်းအပ်သူ အမည်');
     }
     if (!validCustomerPhone) {
       list.push('ဆက်သွယ်ရန် ဖုန်းနံပါတ် (၈ လုံးမှ ၁၅ လုံး)');
@@ -443,12 +449,15 @@ export default function App() {
       list.push(`${payment} ငွေလွှဲစလစ် (Screenshot)`);
     }
     return list;
-  }, [enrollName, validCustomerPhone, isCourseBookIncluded, deliveryAddress, isCash, receiptFile, receiptBase64, payment]);
+  }, [enrollName, validEnrollerName, validCustomerPhone, isCourseBookIncluded, deliveryAddress, isCash, receiptFile, receiptBase64, payment]);
 
   const bookMissingFields = useMemo(() => {
     const list: string[] = [];
     if (!bookCustomerName.trim() || bookCustomerName.trim().length < 2) {
       list.push('ဝယ်ယူသူ အမည်အပြည့်အစုံ');
+    }
+    if (!validEnrollerName) {
+      list.push('သင်တန်းအပ်သူ အမည်');
     }
     if (!validCustomerPhone) {
       list.push('ဆက်သွယ်ရန် ဖုန်းနံပါတ် (၈ လုံးမှ ၁၅ လုံး)');
@@ -460,7 +469,7 @@ export default function App() {
       list.push(`${payment} ငွေလွှဲစလစ် (Screenshot)`);
     }
     return list;
-  }, [bookCustomerName, validCustomerPhone, deliveryAddress, isCash, receiptFile, receiptBase64, payment]);
+  }, [bookCustomerName, validEnrollerName, validCustomerPhone, deliveryAddress, isCash, receiptFile, receiptBase64, payment]);
 
   const canSubmitOrder =
     checkoutKind === 'course' ? courseMissingFields.length === 0 : bookMissingFields.length === 0;
@@ -492,6 +501,7 @@ export default function App() {
     setCheckoutStyle(style);
     setCheckoutLevel('Level 1 + 2');
     setEnrollName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
+    setEnrollerName('');
     setBookCustomerName(persist.displayName || 'THAISAR Member');
     setCustomerPhone(persist.profile.phone || '');
     setDeliveryAddress(persist.profile.address || '');
@@ -513,6 +523,7 @@ export default function App() {
     setCheckoutStyle(style);
     setCheckoutLevel(style === 'video' ? 'Level 1' : 'Level 1 + 2');
     setEnrollName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
+    setEnrollerName('');
     setBookCustomerName(persist.displayName || 'THAISAR Member');
     setCustomerPhone(persist.profile.phone || '');
     setDeliveryAddress(persist.profile.address || '');
@@ -546,6 +557,7 @@ export default function App() {
     setCheckoutKind('book');
     setDelivery('Myanmar');
     setBookCustomerName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
+    setEnrollerName('');
     setCustomerPhone(persist.profile.phone || '');
     setDeliveryAddress(persist.profile.address || '');
     setPhoneSaved(!!persist.profile.phone);
@@ -577,10 +589,11 @@ export default function App() {
       label = selectedBook.name;
     }
 
-    const activeCustomerName =
+    const activeStudentName =
       checkoutKind === 'course'
         ? enrollName.trim()
         : bookCustomerName.trim() || persist.displayName || 'Customer';
+    const activeEnrollerName = enrollerName.trim();
     const activePhone = customerPhone.trim();
     const activeAddress = checkoutKind === 'book' || addBook ? deliveryAddress.trim() : '';
 
@@ -647,7 +660,9 @@ export default function App() {
           try {
             const payload = {
               timestamp: new Date().toISOString(),
-              customerName: activeCustomerName,
+              customerName: activeStudentName,
+              studentName: activeStudentName,
+              enrollerName: activeEnrollerName,
               phone: activePhone,
               deliveryAddress: activeAddress || undefined,
               courseOrProduct: label,
@@ -701,7 +716,9 @@ export default function App() {
             setUploadStatusText('Order အချက်အလက်များ ပေးပို့နေပါသည်...');
             const codPayload = {
               timestamp: new Date().toISOString(),
-              customerName: activeCustomerName,
+              customerName: activeStudentName,
+              studentName: activeStudentName,
+              enrollerName: activeEnrollerName,
               phone: activePhone,
               deliveryAddress: activeAddress || undefined,
               courseOrProduct: label,
@@ -746,7 +763,8 @@ export default function App() {
         isSystemDoc: false,
         pagesCount: 1,
         contentPreview: [
-          `ကျောင်းသား/ဝယ်ယူသူ: ${activeCustomerName}`,
+          `ကျောင်းသား/ဝယ်ယူသူ: ${activeStudentName}`,
+          `သင်တန်းအပ်သူ အမည်: ${activeEnrollerName}`,
           `အော်ဒါအမှတ်: ${orderId}`,
           `သင်တန်း/စာအုပ်: ${label}`,
           `ပေးချေမှုပုံစံ: ${payment} (${isCash ? 'Admin ဆက်သွယ်မည်' : 'ငွေလွှဲပြီး'})`,
@@ -770,7 +788,8 @@ export default function App() {
         bookPrice: bookAddPrice,
         delivery: checkoutKind === 'book' || addBook ? delivery : null,
         payment,
-        studentName: activeCustomerName,
+        studentName: activeStudentName,
+        enrollerName: activeEnrollerName,
         telegramUsername: checkoutKind === 'course' ? telegramUsername.trim() : null,
         customerPhone: activePhone,
         createdAt: new Date().toLocaleDateString('en-GB'),
@@ -799,7 +818,8 @@ export default function App() {
             book_price: bookAddPrice,
             delivery: checkoutKind === 'book' || addBook ? delivery : null,
             payment,
-            student_name: activeCustomerName,
+            student_name: activeStudentName,
+            enroller_name: activeEnrollerName,
             telegram_username: checkoutKind === 'course' ? telegramUsername.trim() : null,
             customer_phone: activePhone,
             created_at: new Date().toISOString(),
@@ -851,6 +871,7 @@ export default function App() {
       setReceiptName('');
       setReceiptBase64('');
       setReceiptPreviewUrl('');
+      setEnrollerName('');
 
       // Open confirmation modal
       setActiveSheet('orderSuccess');
@@ -2297,6 +2318,12 @@ export default function App() {
                         ကျောင်းသား/သူ: {o.studentName}
                       </>
                     )}
+                    {o.enrollerName && (
+                      <>
+                        <br />
+                        သင်တန်းအပ်သူ: {o.enrollerName}
+                      </>
+                    )}
                     {o.telegramUsername && (
                       <>
                         <br />
@@ -2921,6 +2948,22 @@ export default function App() {
                   </div>
                 )}
 
+                {/* NEW REQUIRED FIELD: သင်တန်းအပ်သူ အမည် */}
+                <div className="field" style={{ marginTop: '12px' }}>
+                  <label htmlFor="enrollerName">
+                    သင်တန်းအပ်သူ အမည် <span style={{ color: '#bd3b45' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="enrollerName"
+                    required
+                    placeholder="သင်တန်းအပ်နှံသူ / ငွေလွှဲသူ အမည် ထည့်ရန်"
+                    value={enrollerName}
+                    onChange={(e) => setEnrollerName(e.target.value)}
+                  />
+                  <small>သင်တန်းအပ်နှံသူ သို့မဟုတ် ငွေလွှဲသူ၏ အမည်အပြည့်အစုံ ထည့်ပေးပါ။</small>
+                </div>
+
                 {isCash ? (
                   <div className="callout-cash">
                     📞 <strong>Cash on Delivery / Admin Contact</strong>
@@ -3198,6 +3241,22 @@ export default function App() {
                     <div className="only-number">ဒီဖုန်းနံပါတ်တစ်ခုတည်းနှင့်သာ ငွေလက်ခံပါသည်။</div>
                   </div>
                 )}
+
+                {/* NEW REQUIRED FIELD: သင်တန်းအပ်သူ အမည် */}
+                <div className="field" style={{ marginTop: '12px' }}>
+                  <label htmlFor="enrollerNameBook">
+                    သင်တန်းအပ်သူ အမည် <span style={{ color: '#bd3b45' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="enrollerNameBook"
+                    required
+                    placeholder="သင်တန်းအပ်နှံသူ / ငွေလွှဲသူ အမည် ထည့်ရန်"
+                    value={enrollerName}
+                    onChange={(e) => setEnrollerName(e.target.value)}
+                  />
+                  <small>သင်တန်းအပ်နှံသူ သို့မဟုတ် ငွေလွှဲသူ၏ အမည်အပြည့်အစုံ ထည့်ပေးပါ။</small>
+                </div>
 
                 {isCash ? (
                   <div className="callout-cash">
@@ -3796,6 +3855,9 @@ export default function App() {
                   <div className="details" style={{ marginTop: '8px' }}>
                     {lastSubmittedOrder.order.studentName && (
                       <div>ကျောင်းသား/သူ: <strong>{lastSubmittedOrder.order.studentName}</strong></div>
+                    )}
+                    {lastSubmittedOrder.order.enrollerName && (
+                      <div>သင်တန်းအပ်သူ: <strong>{lastSubmittedOrder.order.enrollerName}</strong></div>
                     )}
                     <div>ဆက်သွယ်ရန်ဖုန်း: <strong>{lastSubmittedOrder.order.customerPhone}</strong></div>
                     <div>ပေးချေမှုစနစ်: <strong>{lastSubmittedOrder.order.payment}</strong></div>

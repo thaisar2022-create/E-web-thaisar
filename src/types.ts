@@ -59,6 +59,7 @@ export interface Order {
   delivery?: 'Myanmar' | 'Thailand' | null;
   payment: PaymentMethod;
   studentName?: string | null;
+  enrollerName?: string | null;
   telegramUsername?: string | null;
   customerPhone: string;
   createdAt: string;

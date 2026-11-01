@@ -81,7 +81,9 @@ function doPost(e) {
 
     // 1. Extract Order & Customer Fields
     var timestamp = data.timestamp || new Date().toISOString();
-    var customerName = data.customerName || data.name || "Customer";
+    var studentName = data.studentName || data.customerName || data.name || "Student";
+    var enrollerName = data.enrollerName || "";
+    var customerName = data.customerName || data.name || studentName || "Customer";
     var phone = data.phone || data.customerPhone || "";
     var courseOrProduct = data.courseOrProduct || data.label || data.course || "Course";
     var paymentMethod = data.paymentMethod || data.payment || "KBZPay";
@@ -90,7 +92,7 @@ function doPost(e) {
 
     // 2. Extract Base64 Image
     var base64String = data.fileBase64 || data.base64 || data.image || data.file || "";
-    var fileName = data.fileName || ("Slip_" + orderId + "_" + customerName.replace(/[^a-zA-Z0-9_-]/g, "_") + ".jpg");
+    var fileName = data.fileName || ("Slip_" + orderId + "_" + (enrollerName || customerName).replace(/[^a-zA-Z0-9_-]/g, "_") + ".jpg");
     var mimeType = data.fileMimeType || data.mimeType || "image/jpeg";
     var folderId = data.folderId || DRIVE_FOLDER_ID;
 
@@ -120,6 +122,8 @@ function doPost(e) {
       driveFile.setDescription(
         "THAISAR Student Payment Slip\n" +
         "Order ID: " + orderId + "\n" +
+        "Student: " + studentName + "\n" +
+        (enrollerName ? ("Enroller / Payer: " + enrollerName + "\n") : "") +
         "Customer: " + customerName + "\n" +
         "Phone: " + phone + "\n" +
         "Course/Item: " + courseOrProduct + "\n" +
@@ -181,10 +185,14 @@ function doPost(e) {
         // Format hyperlink formula if file URL exists
         var linkCell = fileUrl ? '=HYPERLINK("' + fileUrl + '", "View Slip")' : "No Slip";
 
+        var customerDisplayName = enrollerName
+          ? (studentName + " (အပ်သူ: " + enrollerName + ")")
+          : (studentName || customerName);
+
         var newRow = [
           formattedDate,
           orderId,
-          customerName,
+          customerDisplayName,
           phone,
           courseOrProduct,
           paymentMethod,

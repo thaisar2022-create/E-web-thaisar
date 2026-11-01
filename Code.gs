@@ -81,7 +81,9 @@ function doPost(e) {
 
     // 1. Extract Order & Customer Fields
     var timestamp = data.timestamp || new Date().toISOString();
-    var customerName = data.customerName || data.name || "Customer";
+    var studentName = data.studentName || data.customerName || data.name || "Student";
+    var enrollerName = data.enrollerName || "";
+    var customerName = data.customerName || data.name || studentName || "Customer";
     var phone = data.phone || data.customerPhone || "";
     var deliveryAddress = data.deliveryAddress || data.address || "";
     var courseOrProduct = data.courseOrProduct || data.label || data.course || "Course";
@@ -92,7 +94,7 @@ function doPost(e) {
     // 2. Extract Base64 Image (Optional for Cash on Delivery)
     var rawBase64 = data.fileBase64 || data.base64 || data.image || data.file || "";
     var base64String = (typeof rawBase64 === "string" && rawBase64.trim() !== "" && rawBase64 !== "null") ? rawBase64 : "";
-    var fileName = data.fileName || ("Slip_" + orderId + "_" + customerName.replace(/[^a-zA-Z0-9_-]/g, "_") + ".jpg");
+    var fileName = data.fileName || ("Slip_" + orderId + "_" + (enrollerName || customerName).replace(/[^a-zA-Z0-9_-]/g, "_") + ".jpg");
     var mimeType = data.fileMimeType || data.mimeType || "image/jpeg";
     var folderId = data.folderId || DRIVE_FOLDER_ID;
 
@@ -123,6 +125,8 @@ function doPost(e) {
         driveFile.setDescription(
           "THAISAR Student Payment Slip\n" +
           "Order ID: " + orderId + "\n" +
+          "Student: " + studentName + "\n" +
+          (enrollerName ? ("Enroller / Payer: " + enrollerName + "\n") : "") +
           "Customer: " + customerName + "\n" +
           "Phone: " + phone + "\n" +
           (deliveryAddress ? ("Address: " + deliveryAddress + "\n") : "") +
@@ -193,12 +197,16 @@ function doPost(e) {
           : (paymentMethod === "Cash on Delivery" ? "Cash on Delivery (No Slip)" : "No Slip");
 
         var colCount = sheet.getLastColumn();
+        var customerDisplayName = enrollerName
+          ? (studentName + " (အပ်သူ: " + enrollerName + ")")
+          : (studentName || customerName);
+
         var newRow;
         if (colCount >= 10 || sheet.getLastRow() === 1) {
           newRow = [
             formattedDate,
             orderId,
-            customerName,
+            customerDisplayName,
             phone,
             deliveryAddress || "-",
             courseOrProduct,
@@ -211,7 +219,7 @@ function doPost(e) {
           newRow = [
             formattedDate,
             orderId,
-            customerName + (deliveryAddress ? " (" + deliveryAddress + ")" : ""),
+            customerDisplayName + (deliveryAddress ? " (" + deliveryAddress + ")" : ""),
             phone,
             courseOrProduct,
             paymentMethod,
