@@ -472,6 +472,36 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: 7px;
   font-size: 9px;
   font-weight: 800;
+  z-index: 1;
+}
+
+/* Admin-set course cover photo (Supabase); gradient stays as the fallback. */
+.cover img.cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.cover .thai {
+  position: relative;
+  z-index: 1;
+}
+
+.cover .ring {
+  z-index: 1;
+}
+
+/* Admin-set per-mode class photo (Supabase poster); placeholder stays as fallback. */
+.class-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 1;
 }
 
 .item-body {

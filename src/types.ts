@@ -26,6 +26,8 @@ export interface Course {
   english: string;
   thai: string;
   cover: string;
+  /** Admin-set course cover image URL from Supabase (null = gradient fallback). */
+  imageUrl?: string;
   descr: string;
   eligible: boolean;
   prices: Record<ClassStyle, [number, number | null]>;
@@ -40,6 +42,8 @@ export interface Book {
   promo: [number, number | null];
   eligible: boolean;
   cover: string;
+  /** Admin-set book cover image URL from Supabase (null = placeholder). */
+  imageUrl?: string;
   summary: string;
   shortDescription: string;
   features: string[];

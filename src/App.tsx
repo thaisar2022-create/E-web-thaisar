@@ -17,8 +17,8 @@ import {
   AppDocument,
 } from './types';
 import {
-  courses,
-  books,
+  courses as fallbackCourses,
+  books as fallbackBooks,
   tmmTopics,
   tmmBenefits,
   tlsChapters,
@@ -35,6 +35,7 @@ import {
   getOrCreateClientId,
   SUPABASE_STORAGE_BUCKET,
 } from './supabaseClient';
+import { fetchCatalog } from './catalog';
 
 const STORE_KEY = 'thaisar-mobile-demo-v11-docs';
 
@@ -126,6 +127,14 @@ export default function App() {
       // ignore
     }
   }, [persist]);
+
+  // Live catalog from Supabase (admin-controlled prices + images).
+  // Starts as the data.ts fallback so the site renders identically when
+  // Supabase is unreachable; replaced by the Supabase rows once fetched.
+  const [courses, setCourses] = useState<Course[]>(fallbackCourses);
+  const [books, setBooks] = useState<Book[]>(fallbackBooks);
+  // Per-mode poster images, keyed `<TMM|TLS>:<mode>` (e.g. `TLS:yangon`).
+  const [modeImages, setModeImages] = useState<Record<string, string>>({});
 
   // Dynamic SEO document titles based on active page
   useEffect(() => {
@@ -277,6 +286,18 @@ export default function App() {
             }));
             await client.from('documents').insert(seedPayload);
           }
+        }
+        // 4. Fetch live course catalog (prices + images) from Supabase.
+        // data.ts stays as the offline fallback when this fails or is empty.
+        try {
+          const catalog = await fetchCatalog(client);
+          if (catalog) {
+            setCourses(catalog.courses);
+            setBooks(catalog.books);
+            setModeImages(catalog.modeImages);
+          }
+        } catch (catalogErr) {
+          console.warn('Supabase catalog fetch warning:', catalogErr);
         }
       } catch (err) {
         console.warn('Supabase initial fetch warning:', err);
@@ -895,31 +916,6 @@ export default function App() {
 
   const handleOrderSubmit = handleSubmitOrder;
 
-  // Simulate Admin Approval
-  const handleApproveOrder = (orderId: string) => {
-    setPersist((prev) => {
-      const updated = prev.orders.map((o) => {
-        if (o.id === orderId) {
-          return { ...o, status: 'approved' as const };
-        }
-        return o;
-      });
-      return { ...prev, orders: updated };
-    });
-
-    if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('orders')
-        .update({ status: 'approved' })
-        .eq('id', orderId)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase update order status warning:', error.message);
-        });
-    }
-
-    notify(`Demo: Order approved! Membership status updated.`);
-  };
-
   // Handle Edit Profile
   const handleOpenProfile = () => {
     setTempProfileName(persist.displayName === 'THAISAR Member' ? '' : persist.displayName);
@@ -1293,6 +1289,7 @@ export default function App() {
               {courses.map((c) => (
                 <article key={c.id} className="course-mini">
                   <div className={`cover ${c.cover}`}>
+                    {c.imageUrl ? <img className="cover-img" src={c.imageUrl} alt="" /> : null}
                     <div className="ring" />
                     <span className="thai" style={{ fontFamily: 'system-ui, sans-serif' }}>
                       {c.id === 'speaking' ? 'TMM' : 'TLS'}
@@ -1330,13 +1327,19 @@ export default function App() {
               {books.map((b) => (
                 <article key={b.id} className="book-card featured">
                   <div className="book-pic">
-                    <div className="book-art no-photo">
-                      <div className="book-photo-hint">
-                        <span>📚</span>
-                        <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
-                        <small>practical-thai-book.webp</small>
+                    {b.imageUrl ? (
+                      <div className="book-art">
+                        <img src={b.imageUrl} alt={b.name} />
                       </div>
-                    </div>
+                    ) : (
+                      <div className="book-art no-photo">
+                        <div className="book-photo-hint">
+                          <span>📚</span>
+                          <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
+                          <small>practical-thai-book.webp</small>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <h3>{b.name}</h3>
@@ -1433,6 +1436,7 @@ export default function App() {
               .map((c) => (
                 <article key={c.id} className="full-card">
                   <div className={`cover ${c.cover}`}>
+                    {c.imageUrl ? <img className="cover-img" src={c.imageUrl} alt="" /> : null}
                     <div className="ring" />
                     <span className="thai" style={{ fontFamily: 'system-ui, sans-serif' }}>
                       {c.id === 'speaking' ? 'TMM' : 'TLS'}
@@ -1512,11 +1516,15 @@ export default function App() {
                   return (
                     <article key={sty} className="tmm-price-card">
                       <div className="class-photo no-photo" data-style-photo={sty}>
-                        <div className="class-photo-placeholder" aria-hidden="true">
-                          <span className="placeholder-symbol">{emoji}</span>
-                          <strong>{title} ပုံထည့်ရန်</strong>
-                          <small>1200 × 675 px</small>
-                        </div>
+                        {modeImages[`TMM:${sty}`] ? (
+                          <img src={modeImages[`TMM:${sty}`]} alt={title} />
+                        ) : (
+                          <div className="class-photo-placeholder" aria-hidden="true">
+                            <span className="placeholder-symbol">{emoji}</span>
+                            <strong>{title} ပုံထည့်ရန်</strong>
+                            <small>1200 × 675 px</small>
+                          </div>
+                        )}
                       </div>
                       <div className="tmm-price-head">
                         <span className="style-emoji">{emoji}</span>
@@ -1694,11 +1702,15 @@ export default function App() {
                   return (
                     <article key={sty} className="tmm-price-card">
                       <div className="class-photo no-photo" data-style-photo={sty}>
-                        <div className="class-photo-placeholder" aria-hidden="true">
-                          <span className="placeholder-symbol">{emoji}</span>
-                          <strong>{name} ပုံထည့်ရန်</strong>
-                          <small>1200 × 675 px</small>
-                        </div>
+                        {modeImages[`TLS:${sty}`] ? (
+                          <img src={modeImages[`TLS:${sty}`]} alt={name} />
+                        ) : (
+                          <div className="class-photo-placeholder" aria-hidden="true">
+                            <span className="placeholder-symbol">{emoji}</span>
+                            <strong>{name} ပုံထည့်ရန်</strong>
+                            <small>1200 × 675 px</small>
+                          </div>
+                        )}
                       </div>
                       <div className="tmm-price-head">
                         <span className="style-emoji">{emoji}</span>
@@ -1844,13 +1856,19 @@ export default function App() {
               {books.map((b) => (
                 <article key={b.id} className="book-card featured">
                   <div className="book-pic">
-                    <div className="book-art no-photo">
-                      <div className="book-photo-hint">
-                        <span>📚</span>
-                        <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
-                        <small>practical-thai-book.webp</small>
+                    {b.imageUrl ? (
+                      <div className="book-art">
+                        <img src={b.imageUrl} alt={b.name} />
                       </div>
-                    </div>
+                    ) : (
+                      <div className="book-art no-photo">
+                        <div className="book-photo-hint">
+                          <span>📚</span>
+                          <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
+                          <small>practical-thai-book.webp</small>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <h3>{b.name}</h3>
@@ -1910,13 +1928,19 @@ export default function App() {
 
             <section className="book-detail-hero">
               <div className="book-pic">
-                <div className="book-art no-photo">
-                  <div className="book-photo-hint">
-                    <span>📚</span>
-                    <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
-                    <small>practical-thai-book.webp</small>
+                {selectedBook.imageUrl ? (
+                  <div className="book-art">
+                    <img src={selectedBook.imageUrl} alt={selectedBook.name} />
                   </div>
-                </div>
+                ) : (
+                  <div className="book-art no-photo">
+                    <div className="book-photo-hint">
+                      <span>📚</span>
+                      <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
+                      <small>practical-thai-book.webp</small>
+                    </div>
+                  </div>
+                )}
               </div>
               <h2>{selectedBook.name}</h2>
               <div className="subtitle" style={{ margin: '0 2px' }}>
@@ -2378,24 +2402,14 @@ export default function App() {
                       </button>
                     )}
 
-                    {o.status === 'pending' && (
-                      <button
-                        className="outline-btn"
-                        type="button"
-                        style={{ flex: 1, minWidth: '160px' }}
-                        onClick={() => handleApproveOrder(o.id)}
-                      >
-                        ✓ Simulate ADMIN Approval (Demo Only)
-                      </button>
-                    )}
                   </div>
                 </div>
               ))
             )}
 
             <div className="notice" style={{ marginTop: '14px' }}>
-              🔒 ဒီ Approval ခလုတ်က UI Demo စမ်းသပ်ဖို့သာ ဖြစ်ပါတယ်။ တကယ့် Website မှာ Admin Portal
-              ထဲမှာသာ Payment Approval လုပ်ခွင့်ရှိပါမယ်။
+              🔒 Order အတည်ပြုခြင်းကို Admin Portal ထဲမှာသာ လုပ်ပါမယ်။ ဒီနေရာမှာ Order status ကိုပဲ
+              ကြည့်နိုင်ပါတယ်။
             </div>
           </div>
         )}
