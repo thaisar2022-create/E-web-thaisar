@@ -2695,7 +2695,7 @@ export default function App() {
                       className={addBook ? 'selected' : ''}
                       onClick={() => setAddBook(true)}
                     >
-                      ✓ စာအုပ်ပါ ဝယ်မည်
+                      {addBook ? '✓ စာအုပ်ပါ ဝယ်မည်' : 'စာအုပ်ပါ ဝယ်မည်'}
                     </button>
                   </div>
 
