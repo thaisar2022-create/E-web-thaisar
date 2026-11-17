@@ -14,6 +14,14 @@ export type Currency = 'MMK' | 'THB';
 
 export type ClassStyle = 'zoom' | 'video' | 'yangon' | 'mandalay';
 
+/** Per-level price key: L1 = Level 1 only, L2 = Level 2 only, L12 = Level 1 + 2 together. */
+export type LevelKey = 'L1' | 'L2' | 'L12';
+
+export interface LevelPrice {
+  original: number;
+  promo: number;
+}
+
 export type PaymentMethod =
   | 'KBZPay'
   | 'WavePay'
@@ -32,6 +40,14 @@ export interface Course {
   eligible: boolean;
   prices: Record<ClassStyle, [number, number | null]>;
   promo: Record<ClassStyle, number>;
+  /**
+   * Per-level prices (Level 1 / Level 2 only) for live modes (zoom/yangon/mandalay).
+   * `prices` / `promo` above are the Level 1 + 2 combined price. Video has no
+   * per-level prices — its price is the same however the level is chosen.
+   * Admin-set from Supabase `courses.prices[mode].levels` (see catalog.ts);
+   * absent = fall back to the Level 1 + 2 price.
+   */
+  levelPrices?: Partial<Record<ClassStyle, Partial<Record<'L1' | 'L2', LevelPrice>>>>;
 }
 
 export interface Book {

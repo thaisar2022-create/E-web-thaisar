@@ -8,6 +8,7 @@ import {
   Page,
   Currency,
   ClassStyle,
+  LevelKey,
   PaymentMethod,
   Course,
   Book,
@@ -495,14 +496,29 @@ export default function App() {
   const canSubmitOrder =
     checkoutKind === 'course' ? courseMissingFields.length === 0 : bookMissingFields.length === 0;
 
-  // Price calculations
-  const calculateCoursePrice = (c: Course, sty: ClassStyle) => {
-    return c.promo[sty] ?? c.prices[sty][0];
+  // Price calculations — per level. 'Level 1' / 'Level 2' / 'Level 1 + 2'.
+  const levelKeyFromLabel = (label: string): LevelKey =>
+    label === 'Level 1' ? 'L1' : label === 'Level 2' ? 'L2' : 'L12';
+
+  /** {original, promo} for a course + mode + level. Video has no per-level
+   *  prices, so it always returns the (single) mode price. Missing per-level
+   *  data falls back to the Level 1 + 2 price. */
+  const getLevelPrice = (c: Course, sty: ClassStyle, level: LevelKey) => {
+    const original = c.prices[sty][0];
+    const promo = c.promo[sty] ?? original;
+    if (level === 'L12' || sty === 'video') return { original, promo };
+    const lv = c.levelPrices?.[sty]?.[level];
+    if (!lv) return { original, promo };
+    return { original: lv.original, promo: lv.promo };
+  };
+
+  const calculateCoursePrice = (c: Course, sty: ClassStyle, level: LevelKey = 'L12') => {
+    return getLevelPrice(c, sty, level).promo;
   };
 
   const calculateTotals = () => {
     if (checkoutKind === 'course') {
-      const price = calculateCoursePrice(selectedCourse, checkoutStyle);
+      const price = calculateCoursePrice(selectedCourse, checkoutStyle, levelKeyFromLabel(checkoutLevel));
       const bookAddPrice = addBook ? books[0].promo[0] ?? books[0].price[0] : 0;
       const discount = selectedCourse.eligible ? Math.round((price * currentTier.rate) / 100) : 0;
       const total = price + bookAddPrice - discount;
@@ -1507,7 +1523,7 @@ export default function App() {
                 <span className="pill orange">4 Class Styles</span>
               </div>
               <p className="subtitle" style={{ marginBottom: '12px' }}>
-                Zoom / ရန်ကုန် / မန္တလေး / Video အတန်းများထဲမှ မိမိတက်ရောက်လိုသောပုံစံကို ရွေးချယ်ပြီး အပ်နှံနိုင်ပါတယ်။ (Level 1 + 2 တွဲလျက်)
+                Zoom / ရန်ကုန် / မန္တလေး / Video အတန်းများထဲမှ မိမိတက်ရောက်လိုသောပုံစံကို ရွေးချယ်ပြီး အပ်နှံနိုင်ပါတယ်။ (Zoom / ရန်ကုန် / မန္တလေးမှာ Level 1၊ Level 2 သို့မဟုတ် Level 1 + 2 ရွေးနိုင်ပါတယ်)
               </p>
 
               <div className="tmm-pricing">
@@ -1537,13 +1553,29 @@ export default function App() {
                         <span className="style-emoji">{emoji}</span>
                         <div>
                           <strong>{title}</strong>
-                          <small>{duration} · Level 1 + 2 တွဲလျက်</small>
+                          <small>
+                            {duration} ·{' '}
+                            {sty === 'video' ? 'Level 1 + 2 တွဲလျက်' : 'Level 1 / Level 2 / Level 1 + 2'}
+                          </small>
                         </div>
                       </div>
                       <div className="tmm-price-lines">
                         <span className="regular">{mmk(c.prices[sty][0])}</span>
                         <span className="promo">{mmk(c.promo[sty])}</span>
+                        <small>Level 1 + 2 တွဲလျက်</small>
                       </div>
+                      {sty !== 'video' && (
+                        <div className="tmm-level-lines">
+                          <div>
+                            <span>Level 1 သီးသန့်</span>
+                            <strong>{mmk(getLevelPrice(c, sty, 'L1').promo)}</strong>
+                          </div>
+                          <div>
+                            <span>Level 2 သီးသန့်</span>
+                            <strong>{mmk(getLevelPrice(c, sty, 'L2').promo)}</strong>
+                          </div>
+                        </div>
+                      )}
                       <div className="tmm-price-footer">
                         <span className="pill orange">
                           {sty === 'video' ? 'Promotion Price' : 'Early Bird Price'}
@@ -1562,8 +1594,9 @@ export default function App() {
               </div>
 
               <div className="notice" style={{ marginTop: '14px', marginBottom: '18px' }}>
-                ✓ TMM ရဲ့ Zoom၊ ရန်ကုန်၊ မန္တလေးနဲ့ Video Class အားလုံးမှာ{' '}
-                <strong>Level 1 + Level 2 နှစ်ခုလုံး တွဲလျက် ပါဝင်ပါတယ်။</strong> Promotion ကာလနဲ့ THB
+                ✓ TMM ရဲ့ Zoom၊ ရန်ကုန်၊ မန္တလေးအတန်းတွေမှာ{' '}
+                <strong>Level 1 သီးသန့်၊ Level 2 သီးသန့် ဒါမှမဟုတ် Level 1 + Level 2 တွဲလျက်</strong>{' '}
+                ရွေးနိုင်ပါတယ်။ Video Class ကတော့ Level 1 + 2 တွဲလျက်ပါ။ Promotion ကာလနဲ့ THB
                 ဈေးနှုန်းကို ကျောင်းဘက်မှ အတည်ပြုရန် လိုအပ်ပါတယ်။
               </div>
             </div>
@@ -1700,7 +1733,7 @@ export default function App() {
                 <span className="pill orange">4 Class Styles</span>
               </div>
               <p className="subtitle" style={{ marginBottom: '12px' }}>
-                Zoom၊ ရန်ကုန်၊ မန္တလေး = Level 1 + 2 တွဲလျက် (ရက် ၅၀)။ Video TLS = Level 1 / Level 2 ကို သီးခြားရွေးနိုင်ပါတယ်။
+                Zoom၊ ရန်ကုန်၊ မန္တလေး = Level 1 / Level 2 / Level 1 + 2 ရွေးနိုင်ပါတယ် (ရက် ၅၀)။ Video TLS = Level 1 / Level 2 ကို သီးခြားရွေးနိုင်ပါတယ်။
               </p>
 
               <div className="tmm-pricing">
@@ -1731,14 +1764,28 @@ export default function App() {
                         <div>
                           <strong>{name}</strong>
                           <small>
-                            {duration} · {sty === 'video' ? 'Level 1 / Level 2 သီးသန့်' : 'Level 1 + 2 တွဲလျက်'}
+                            {duration} ·{' '}
+                            {sty === 'video' ? 'Level 1 / Level 2 သီးသန့်' : 'Level 1 / Level 2 / Level 1 + 2'}
                           </small>
                         </div>
                       </div>
                       <div className="tmm-price-lines">
                         <span className="regular">{mmk(c.prices[sty][0])}</span>
                         <span className="promo">{mmk(c.promo[sty])}</span>
+                        <small>Level 1 + 2 တွဲလျက်</small>
                       </div>
+                      {sty !== 'video' && (
+                        <div className="tmm-level-lines">
+                          <div>
+                            <span>Level 1 သီးသန့်</span>
+                            <strong>{mmk(getLevelPrice(c, sty, 'L1').promo)}</strong>
+                          </div>
+                          <div>
+                            <span>Level 2 သီးသန့်</span>
+                            <strong>{mmk(getLevelPrice(c, sty, 'L2').promo)}</strong>
+                          </div>
+                        </div>
+                      )}
                       <div className="tmm-price-footer">
                         <span className="pill orange">
                           {sty === 'video' ? 'Promotion' : 'Early Bird'} Price
@@ -2745,16 +2792,18 @@ export default function App() {
                 <div className="enroll-intro">
                   <div className="enroll-selected-tag">✓ သင်ရွေးထားသော အတန်း</div>
                   <strong>
-                    {selectedCourse.name} · {styleNames[checkoutStyle]}
+                    {selectedCourse.name} · {styleNames[checkoutStyle]} · {checkoutLevel}
                   </strong>
                   <small>
-                    {selectedCourse.id === 'skills' && checkoutStyle === 'video'
-                      ? 'Level 1 သို့မဟုတ် Level 2 ကို အောက်မှာ ရွေးပါ။'
-                      : 'Level 1 + Level 2 တွဲလျက် ပါဝင်ပါတယ်။'}
+                    {checkoutStyle === 'video'
+                      ? selectedCourse.id === 'skills'
+                        ? 'Level 1 သို့မဟုတ် Level 2 ကို အောက်မှာ ရွေးပါ။'
+                        : 'Level 1 + Level 2 တွဲလျက် ပါဝင်ပါတယ်။'
+                      : 'Level 1၊ Level 2 သို့မဟုတ် Level 1 + 2 ကို အောက်မှာ ရွေးပါ။'}
                   </small>
                 </div>
 
-                {selectedCourse.id === 'skills' && checkoutStyle === 'video' && (
+                {checkoutStyle === 'video' && selectedCourse.id === 'skills' && (
                   <div className="field">
                     <label>
                       သင်တန်း Level ရွေးချယ်ရန် <span className="required-star">*</span>
@@ -2774,6 +2823,31 @@ export default function App() {
                     <small>
                       Video TLS တစ်ခုတည်းမှာ Level 1 သို့မဟုတ် Level 2 ကို သီးခြားရွေးချယ်ရပါမယ်။ Level
                       တစ်ခုချင်းစီအတွက် ဈေးနှုန်းကို Admin ထံ အတည်ပြုရန် လိုအပ်ပါတယ်။
+                    </small>
+                  </div>
+                )}
+
+                {checkoutStyle !== 'video' && (
+                  <div className="field">
+                    <label>
+                      သင်တန်း Level ရွေးချယ်ရန် <span className="required-star">*</span>
+                    </label>
+                    <div className="choice-row">
+                      {(['Level 1', 'Level 2', 'Level 1 + 2'] as const).map((lvl) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          className={checkoutLevel === lvl ? 'selected' : ''}
+                          onClick={() => setCheckoutLevel(lvl)}
+                        >
+                          {lvl}
+                        </button>
+                      ))}
+                    </div>
+                    <small>
+                      Level 1 သီးသန့် {mmk(getLevelPrice(selectedCourse, checkoutStyle, 'L1').promo)} · Level 2
+                      သီးသန့် {mmk(getLevelPrice(selectedCourse, checkoutStyle, 'L2').promo)} · Level 1 + 2{' '}
+                      {mmk(getLevelPrice(selectedCourse, checkoutStyle, 'L12').promo)}
                     </small>
                   </div>
                 )}
@@ -2846,10 +2920,14 @@ export default function App() {
                 </div>
 
                 <div className="enroll-price-strip">
-                  <span>သင်တန်းကြေး</span>
+                  <span>သင်တန်းကြေး ({checkoutLevel})</span>
                   <span>
-                    <s>{mmk(selectedCourse.prices[checkoutStyle][0])}</s>{' '}
-                    <strong>{mmk(selectedCourse.promo[checkoutStyle])}</strong>
+                    <s>
+                      {mmk(getLevelPrice(selectedCourse, checkoutStyle, levelKeyFromLabel(checkoutLevel)).original)}
+                    </s>{' '}
+                    <strong>
+                      {mmk(getLevelPrice(selectedCourse, checkoutStyle, levelKeyFromLabel(checkoutLevel)).promo)}
+                    </strong>
                   </span>
                 </div>
 

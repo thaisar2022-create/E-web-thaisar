@@ -21,6 +21,20 @@ export const courses: Course[] = [
       yangon: 350000,
       mandalay: 350000,
     },
+    levelPrices: {
+      zoom: {
+        L1: { original: 150000, promo: 150000 },
+        L2: { original: 150000, promo: 150000 },
+      },
+      yangon: {
+        L1: { original: 200000, promo: 200000 },
+        L2: { original: 200000, promo: 200000 },
+      },
+      mandalay: {
+        L1: { original: 200000, promo: 200000 },
+        L2: { original: 200000, promo: 200000 },
+      },
+    },
   },
   {
     id: 'skills',
@@ -41,6 +55,20 @@ export const courses: Course[] = [
       video: 100000,
       yangon: 500000,
       mandalay: 500000,
+    },
+    levelPrices: {
+      zoom: {
+        L1: { original: 200000, promo: 200000 },
+        L2: { original: 200000, promo: 200000 },
+      },
+      yangon: {
+        L1: { original: 300000, promo: 300000 },
+        L2: { original: 300000, promo: 300000 },
+      },
+      mandalay: {
+        L1: { original: 300000, promo: 300000 },
+        L2: { original: 300000, promo: 300000 },
+      },
     },
   },
 ];

@@ -7,7 +7,10 @@
  * keeps exactly the same layout, course names, descriptions and order — only
  * prices and images come from Supabase.
  *
- * - Prices: per course + mode, Original + Promotion (MMK).
+ * - Prices: per course + mode, Original + Promotion (MMK) — Level 1 + 2
+ *   combined. Single-level prices (Level 1 / Level 2 only, live modes only)
+ *   come from `courses.prices[mode].levels` in the same jsonb;
+ *   `course_catalog` stays Level 1 + 2 only (one row per mode, as the admin reads it).
  * - Images: per-mode posters from `course_images` / `course_catalog`
  *   (`<COURSE_CODE>:<mode>`, e.g. `TLS:yangon`), and course-level covers
  *   from `courses.image_url`.
@@ -110,6 +113,24 @@ export async function fetchCatalog(client: SupabaseClient): Promise<CatalogResul
         merged.promo[mode] = Number(fromJson.promo);
       }
     }
+    // Per-level prices (Level 1 / Level 2 only) from courses.prices[mode].levels.
+    // course_catalog stays Level 1 + 2 only (the admin reads one row per mode),
+    // so single-level prices live only in this jsonb. Absent = L1+2 price.
+    const levelPrices: Course['levelPrices'] = { ...(base.levelPrices ?? {}) };
+    for (const mode of MODES) {
+      const levels = row?.prices?.[mode]?.levels;
+      if (levels && typeof levels === 'object') {
+        const parsed: Partial<Record<'L1' | 'L2', { original: number; promo: number }>> = {};
+        for (const key of ['L1', 'L2'] as const) {
+          const lv = levels[key];
+          if (lv && Number.isFinite(Number(lv.original)) && Number.isFinite(Number(lv.promo))) {
+            parsed[key] = { original: Number(lv.original), promo: Number(lv.promo) };
+          }
+        }
+        if (parsed.L1 || parsed.L2) levelPrices[mode] = parsed;
+      }
+    }
+    if (Object.keys(levelPrices).length > 0) merged.levelPrices = levelPrices;
     return merged;
   });
 
