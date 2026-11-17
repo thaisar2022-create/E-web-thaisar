@@ -35,6 +35,7 @@ export const courses: Course[] = [
         L2: { original: 200000, promo: 200000 },
       },
     },
+    bookPrices: { L1: 15000, L2: 15000 },
   },
   {
     id: 'skills',
@@ -70,6 +71,7 @@ export const courses: Course[] = [
         L2: { original: 300000, promo: 300000 },
       },
     },
+    bookPrices: { L1: 30000, L2: 15000 },
   },
 ];
 

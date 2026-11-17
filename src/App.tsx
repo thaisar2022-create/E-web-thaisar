@@ -61,7 +61,6 @@ export default function App() {
   const [currency, setCurrency] = useState<Currency>('MMK');
   const [search, setSearch] = useState('');
   const [courseFilter, setCourseFilter] = useState<'all' | 'speaking' | 'skills'>('all');
-  const [selectedBookId, setSelectedBookId] = useState('practical-thai');
   const [freeMode, setFreeMode] = useState<'video' | 'app'>('video');
   const [phraseIdx, setPhraseIdx] = useState(0);
   const [showTrans, setShowTrans] = useState(true);
@@ -144,8 +143,6 @@ export default function App() {
       courses: 'သင်တန်းများ | THAISAR',
       tmm: 'TMM ထိုင်းစကားပြောသီးသန့် | THAISAR',
       tls: 'TLS 4 Skills သင်တန်း | THAISAR',
-      books: 'ထိုင်းစာဖတ်စာအုပ်များ | THAISAR',
-      bookDetail: 'စာအုပ်အသေးစိတ် | THAISAR',
       free: 'အခမဲ့ လေ့လာရန် | THAISAR',
       account: 'ကျွန်ုပ်၏ အကောင့် | THAISAR',
       orders: 'အော်ဒါမှတ်တမ်းများ | THAISAR',
@@ -324,7 +321,6 @@ export default function App() {
   const [activeSheet, setActiveSheet] = useState<
     | 'none'
     | 'enroll'
-    | 'bookBuy'
     | 'profile'
     | 'portal'
     | 'memberRules'
@@ -348,14 +344,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeSheet]);
 
-  // Checkout State
-  const [checkoutKind, setCheckoutKind] = useState<'course' | 'book'>('course');
+  // Checkout State (course enrollment only — the standalone book is no
+  // longer sold on its own; books are only a registration add-on now)
   const [checkoutCourseId, setCheckoutCourseId] = useState<'speaking' | 'skills'>('speaking');
   const [checkoutStyle, setCheckoutStyle] = useState<ClassStyle>('zoom');
   const [checkoutLevel, setCheckoutLevel] = useState<string>('Level 1 + 2');
   const [enrollName, setEnrollName] = useState('');
   const [enrollerName, setEnrollerName] = useState('');
-  const [bookCustomerName, setBookCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [phoneSaved, setPhoneSaved] = useState(false);
@@ -431,12 +426,10 @@ export default function App() {
 
   const currentTier = tiers[userRank];
 
-  const currIndex = currency === 'MMK' ? 0 : 1;
   const money = (n: number) => `${Number(n).toLocaleString('en-US')} ${currency}`;
   const mmk = (n: number) => `${Number(n).toLocaleString('en-US')} ကျပ်`;
 
   const selectedCourse = courses.find((c) => c.id === checkoutCourseId) || courses[0];
-  const selectedBook = books.find((b) => b.id === selectedBookId) || books[0];
 
   // Helper checks
   const isCash = payment === 'Cash on Delivery';
@@ -448,9 +441,9 @@ export default function App() {
     return /^\+?[0-9() .-]+$/.test(raw) && digits.length >= 8 && digits.length <= 15;
   }, [customerPhone]);
 
-  const validEnrollName = checkoutKind !== 'course' || enrollName.trim().length >= 2;
+  const validEnrollName = enrollName.trim().length >= 2;
   const validEnrollerName = enrollerName.trim().length >= 2;
-  const isCourseBookIncluded = checkoutKind === 'course' && addBook;
+  const isCourseBookIncluded = addBook;
 
   // Clear validation lists for Burmese error feedback
   const courseMissingFields = useMemo(() => {
@@ -473,28 +466,7 @@ export default function App() {
     return list;
   }, [enrollName, validEnrollerName, validCustomerPhone, isCourseBookIncluded, deliveryAddress, isCash, receiptFile, receiptBase64, payment]);
 
-  const bookMissingFields = useMemo(() => {
-    const list: string[] = [];
-    if (!bookCustomerName.trim() || bookCustomerName.trim().length < 2) {
-      list.push('ဝယ်ယူသူ အမည်အပြည့်အစုံ');
-    }
-    if (!validEnrollerName) {
-      list.push('သင်တန်းအပ်သူ အမည်');
-    }
-    if (!validCustomerPhone) {
-      list.push('ဆက်သွယ်ရန် ဖုန်းနံပါတ် (၈ လုံးမှ ၁၅ လုံး)');
-    }
-    if (!deliveryAddress.trim() || deliveryAddress.trim().length < 5) {
-      list.push('စာအုပ်ပို့ဆောင်ရန် လိပ်စာအပြည့်အစုံ');
-    }
-    if (!isCash && !receiptFile && !receiptBase64) {
-      list.push(`${payment} ငွေလွှဲစလစ် (Screenshot)`);
-    }
-    return list;
-  }, [bookCustomerName, validEnrollerName, validCustomerPhone, deliveryAddress, isCash, receiptFile, receiptBase64, payment]);
-
-  const canSubmitOrder =
-    checkoutKind === 'course' ? courseMissingFields.length === 0 : bookMissingFields.length === 0;
+  const canSubmitOrder = courseMissingFields.length === 0;
 
   // Price calculations — per level. 'Level 1' / 'Level 2' / 'Level 1 + 2'.
   const levelKeyFromLabel = (label: string): LevelKey =>
@@ -516,30 +488,55 @@ export default function App() {
     return getLevelPrice(c, sty, level).promo;
   };
 
-  const calculateTotals = () => {
-    if (checkoutKind === 'course') {
-      const price = calculateCoursePrice(selectedCourse, checkoutStyle, levelKeyFromLabel(checkoutLevel));
-      const bookAddPrice = addBook ? books[0].promo[0] ?? books[0].price[0] : 0;
-      const discount = selectedCourse.eligible ? Math.round((price * currentTier.rate) / 100) : 0;
-      const total = price + bookAddPrice - discount;
-      return { price, bookAddPrice, discount, total };
-    } else {
-      const price = selectedBook.promo[currIndex] ?? selectedBook.price[currIndex] ?? 0;
-      const discount = selectedBook.eligible ? Math.round((price * currentTier.rate) / 100) : 0;
-      const total = price - discount;
-      return { price, bookAddPrice: 0, discount, total };
+  /** Book add-on price (MMK) for a course + level, from the course's
+   *  `bookPrices` (Supabase `courses.prices.book_prices`). Level 1 only
+   *  charges the Level 1 book, Level 2 only the Level 2 book, and
+   *  Level 1 + 2 charges both books together. TMM: 15,000 / 15,000 /
+   *  30,000. TLS: 30,000 (လက်ရေးလှစာအုပ် + ဖတ်စာအုပ်) / 15,000 / 45,000.
+   *  Video follows the same rule by the level label: TMM Video is fixed
+   *  Level 1 + 2 (30,000); TLS Video picks Level 1 (30,000) or Level 2
+   *  (15,000). Absent data falls back to the Practical Thai book price. */
+  const getBookAddPrice = (c: Course, level: LevelKey) => {
+    const fallback = books[0]?.promo[0] ?? books[0]?.price[0] ?? 0;
+    const bp = c.bookPrices;
+    if (!bp) return fallback;
+    const l1 = bp.L1 ?? 0;
+    const l2 = bp.L2 ?? 0;
+    if (level === 'L1') return l1 > 0 ? l1 : fallback;
+    if (level === 'L2') return l2 > 0 ? l2 : fallback;
+    const both = l1 + l2;
+    return both > 0 ? both : fallback;
+  };
+
+  /** Short label naming the book(s) included at a course + level. */
+  const getBookAddLabel = (c: Course, level: LevelKey) => {
+    if (c.id === 'skills') {
+      if (level === 'L1') return 'လက်ရေးလှစာအုပ် + ဖတ်စာအုပ်';
+      if (level === 'L2') return 'Level 2 စာအုပ်';
+      return 'Level 1 စာအုပ် (လက်ရေးလှစာအုပ် + ဖတ်စာအုပ်) + Level 2 စာအုပ် (၂ အုပ်)';
     }
+    if (level === 'L1') return 'Level 1 စာအုပ်';
+    if (level === 'L2') return 'Level 2 စာအုပ်';
+    return 'Level 1 + Level 2 စာအုပ် (၂ အုပ်)';
+  };
+
+  const calculateTotals = () => {
+    const price = calculateCoursePrice(selectedCourse, checkoutStyle, levelKeyFromLabel(checkoutLevel));
+    const bookAddPrice = addBook
+      ? getBookAddPrice(selectedCourse, levelKeyFromLabel(checkoutLevel))
+      : 0;
+    const discount = selectedCourse.eligible ? Math.round((price * currentTier.rate) / 100) : 0;
+    const total = price + bookAddPrice - discount;
+    return { price, bookAddPrice, discount, total };
   };
 
   // Open Checkout for TMM
   const handleOpenTmmCheckout = (style: ClassStyle) => {
-    setCheckoutKind('course');
     setCheckoutCourseId('speaking');
     setCheckoutStyle(style);
     setCheckoutLevel('Level 1 + 2');
     setEnrollName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
     setEnrollerName('');
-    setBookCustomerName(persist.displayName || 'THAISAR Member');
     setCustomerPhone(persist.profile.phone || '');
     setDeliveryAddress(persist.profile.address || '');
     setPhoneSaved(!!persist.profile.phone);
@@ -555,13 +552,11 @@ export default function App() {
 
   // Open Checkout for TLS
   const handleOpenTlsCheckout = (style: ClassStyle) => {
-    setCheckoutKind('course');
     setCheckoutCourseId('skills');
     setCheckoutStyle(style);
     setCheckoutLevel(style === 'video' ? 'Level 1' : 'Level 1 + 2');
     setEnrollName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
     setEnrollerName('');
-    setBookCustomerName(persist.displayName || 'THAISAR Member');
     setCustomerPhone(persist.profile.phone || '');
     setDeliveryAddress(persist.profile.address || '');
     setPhoneSaved(!!persist.profile.phone);
@@ -588,27 +583,9 @@ export default function App() {
     }, 60);
   };
 
-  // Open Checkout for Book
-  const handleOpenBookCheckout = (bookId: string) => {
-    setSelectedBookId(bookId);
-    setCheckoutKind('book');
-    setDelivery('Myanmar');
-    setBookCustomerName(persist.displayName && persist.displayName !== 'THAISAR Member' ? persist.displayName : '');
-    setEnrollerName('');
-    setCustomerPhone(persist.profile.phone || '');
-    setDeliveryAddress(persist.profile.address || '');
-    setPhoneSaved(!!persist.profile.phone);
-    setPayment('KBZPay');
-    setReceiptFile(null);
-    setReceiptName('');
-    setReceiptBase64('');
-    setReceiptPreviewUrl('');
-    setActiveSheet('bookBuy');
-  };
-
   // Submit Order with Google Drive Screenshot Upload & Cash on Delivery handling
   const handleSubmitOrder = async () => {
-    const missing = checkoutKind === 'course' ? courseMissingFields : bookMissingFields;
+    const missing = courseMissingFields;
     if (missing.length > 0) {
       notify(`အချက်အလက်များ မပြည့်စုံသေးပါ: ${missing.join('၊ ')}`);
       return;
@@ -617,22 +594,14 @@ export default function App() {
     const { total, bookAddPrice } = calculateTotals();
     const orderId = `THS-${Date.now().toString(36).toUpperCase()}`;
 
-    let label = '';
-    if (checkoutKind === 'course') {
-      label = `${selectedCourse.name} · ${checkoutLevel} · ${styleNames[checkoutStyle]} · Promotion${
-        addBook ? ' · စာအုပ်ပါ' : ''
-      }`;
-    } else {
-      label = selectedBook.name;
-    }
+    const label = `${selectedCourse.name} · ${checkoutLevel} · ${styleNames[checkoutStyle]} · Promotion${
+      addBook ? ' · စာအုပ်ပါ' : ''
+    }`;
 
-    const activeStudentName =
-      checkoutKind === 'course'
-        ? enrollName.trim()
-        : bookCustomerName.trim() || persist.displayName || 'Customer';
+    const activeStudentName = enrollName.trim();
     const activeEnrollerName = enrollerName.trim();
     const activePhone = customerPhone.trim();
-    const activeAddress = checkoutKind === 'book' || addBook ? deliveryAddress.trim() : '';
+    const activeAddress = addBook ? deliveryAddress.trim() : '';
 
     const effectiveUploadUrl = (persist.driveUploadUrl || ENV_DRIVE_UPLOAD_URL).trim();
     const effectiveFolderId = (persist.driveFolderId || ENV_DRIVE_FOLDER_ID).trim();
@@ -792,7 +761,7 @@ export default function App() {
         fileType: 'PDF',
         fileSize: '380 KB',
         updatedAt: new Date().toISOString().split('T')[0],
-        courseId: checkoutKind === 'course' ? checkoutCourseId : 'book',
+        courseId: checkoutCourseId,
         orderId: orderId,
         driveFileUrl: uploadedDriveUrl || supabaseSlipUrl || undefined,
         description: `Order ${orderId} အတွက် THAISAR တရားဝင် ${isCash ? 'Order အတည်ပြုလွှာ' : 'ငွေလွှဲပြေစာ'}။`,
@@ -815,19 +784,19 @@ export default function App() {
 
       const newOrder: Order = {
         id: orderId,
-        kind: checkoutKind,
-        itemId: checkoutKind === 'course' ? selectedCourse.id : selectedBook.id,
+        kind: 'course',
+        itemId: selectedCourse.id,
         label,
         status: 'pending',
         currency: 'MMK',
         total,
-        bookIncluded: checkoutKind === 'course' && addBook,
+        bookIncluded: addBook,
         bookPrice: bookAddPrice,
-        delivery: checkoutKind === 'book' || addBook ? delivery : null,
+        delivery: addBook ? delivery : null,
         payment,
         studentName: activeStudentName,
         enrollerName: activeEnrollerName,
-        telegramUsername: checkoutKind === 'course' ? telegramUsername.trim() : null,
+        telegramUsername: telegramUsername.trim() || null,
         customerPhone: activePhone,
         createdAt: new Date().toLocaleDateString('en-GB'),
         receiptFileName: isCash ? '' : (receiptName || (receiptFile ? receiptFile.name : '')),
@@ -845,19 +814,19 @@ export default function App() {
           await supabase.from('orders').insert({
             id: orderId,
             client_id: clientId,
-            kind: checkoutKind,
-            item_id: checkoutKind === 'course' ? selectedCourse.id : selectedBook.id,
+            kind: 'course',
+            item_id: selectedCourse.id,
             label,
             status: 'pending',
             currency: 'MMK',
             total,
-            book_included: checkoutKind === 'course' && addBook,
+            book_included: addBook,
             book_price: bookAddPrice,
-            delivery: checkoutKind === 'book' || addBook ? delivery : null,
+            delivery: addBook ? delivery : null,
             payment,
             student_name: activeStudentName,
             enroller_name: activeEnrollerName,
-            telegram_username: checkoutKind === 'course' ? telegramUsername.trim() : null,
+            telegram_username: telegramUsername.trim() || null,
             customer_phone: activePhone,
             created_at: new Date().toISOString(),
             receipt_file_name: isCash ? '' : (receiptName || (receiptFile ? receiptFile.name : '')),
@@ -1275,10 +1244,6 @@ export default function App() {
                 <span className="quick-icon p">🎓</span>
                 <span>သင်တန်းများ</span>
               </button>
-              <button type="button" onClick={() => setPage('books')}>
-                <span className="quick-icon o">📚</span>
-                <span>စာအုပ်</span>
-              </button>
               <button type="button" onClick={() => setPage('documents')}>
                 <span className="quick-icon m">📁</span>
                 <span>စာရွက်စာတမ်း</span>
@@ -1339,60 +1304,11 @@ export default function App() {
 
 
 
-            <div className="book-list">
-              {books.map((b) => (
-                <article key={b.id} className="book-card featured">
-                  <div className="book-pic">
-                    {b.imageUrl ? (
-                      <div className="book-art">
-                        <img src={b.imageUrl} alt={b.name} />
-                      </div>
-                    ) : (
-                      <div className="book-art no-photo">
-                        <div className="book-photo-hint">
-                          <span>📚</span>
-                          <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
-                          <small>practical-thai-book.webp</small>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <h3>{b.name}</h3>
-                    <div className="subtitle">{b.shortDescription}</div>
-                    <div className="book-price-bar">
-                      <span className="strike">{mmk(b.price[0])}</span>
-                      <strong className="price">{mmk(b.promo[0]!)}</strong>
-                      <span className="pill orange">အထူး Promotion</span>
-                    </div>
-                    <div className="book-card-actions">
-                      <button
-                        type="button"
-                        className="main-btn"
-                        onClick={() => handleOpenBookCheckout(b.id)}
-                      >
-                        ဝယ်ယူမည်
-                      </button>
-                      <button
-                        type="button"
-                        className="outline-btn"
-                        onClick={() => {
-                          setSelectedBookId(b.id);
-                          setPage('bookDetail');
-                        }}
-                      >
-                        စာအုပ်အကြောင်း
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
 
             <p className="smallprint">
               TMM နှင့် TLS သင်တန်းသင်ရိုး၊ MMK ဈေးနှုန်းတွေကို ကျောင်းမှပေးထားတဲ့အချက်အလက်အတိုင်း
-              ဖော်ပြထားပါတယ်။ Promotion သက်တမ်း၊ THB ဈေးနှုန်း၊ အာမခံချက်အသေးစိတ်၊ စာအုပ် Promotion
-              သက်တမ်းကို Live မတင်ခင် အတည်ပြုရန် လိုအပ်ပါတယ်။
+              ဖော်ပြထားပါတယ်။ Promotion သက်တမ်း၊ THB ဈေးနှုန်း၊ အာမခံချက်အသေးစိတ်ကို Live မတင်ခင်
+              အတည်ပြုရန် လိုအပ်ပါတယ်။
             </p>
           </div>
         )}
@@ -1898,166 +1814,6 @@ export default function App() {
               DEMO ONLY — ဒီစာမျက်နှာဟာ ကျောင်းကပေးထားတဲ့ TLS သင်ရိုး၊ ဈေးနှုန်းနဲ့ အာမခံချက်ကို
               အခြေခံထားတဲ့ Frontend နမူနာဖြစ်ပါတယ်။
             </p>
-          </div>
-        )}
-
-        {/* PAGE 5: BOOKS CATALOG */}
-        {page === 'books' && (
-          <div>
-            <div className="page-heading">
-              <div className="eyebrow">THAISAR BOOKSTORE</div>
-              <h1 className="title">ထိုင်းဘာသာစကားစာအုပ်များ</h1>
-              <div className="subtitle">
-                မိမိနှစ်သက်တဲ့ စာအုပ်ကို ရွေးပြီး ဝယ်ယူနိုင်သလို “စာအုပ်အကြောင်း” မှာ အချက်အလက်အသေးစိတ်
-                ဖတ်နိုင်ပါတယ်။
-              </div>
-            </div>
-
-            <div className="book-list">
-              {books.map((b) => (
-                <article key={b.id} className="book-card featured">
-                  <div className="book-pic">
-                    {b.imageUrl ? (
-                      <div className="book-art">
-                        <img src={b.imageUrl} alt={b.name} />
-                      </div>
-                    ) : (
-                      <div className="book-art no-photo">
-                        <div className="book-photo-hint">
-                          <span>📚</span>
-                          <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
-                          <small>practical-thai-book.webp</small>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <h3>{b.name}</h3>
-                    <div className="subtitle">{b.shortDescription}</div>
-                    <div className="book-price-bar">
-                      <span className="strike">{mmk(b.price[0])}</span>
-                      <strong className="price">{mmk(b.promo[0]!)}</strong>
-                      <span className="pill orange">အထူး Promotion</span>
-                    </div>
-                    <div className="book-card-actions">
-                      <button
-                        type="button"
-                        className="main-btn"
-                        onClick={() => handleOpenBookCheckout(b.id)}
-                      >
-                        ဝယ်ယူမည်
-                      </button>
-                      <button
-                        type="button"
-                        className="outline-btn"
-                        onClick={() => {
-                          setSelectedBookId(b.id);
-                          setPage('bookDetail');
-                        }}
-                      >
-                        စာအုပ်အကြောင်း
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            <div className="notice" style={{ marginTop: '16px' }}>
-              📦 စာအုပ်ဖိုးကို အရင်ပေးချေပြီး ပို့ဆောင်ခကို Admin က နောက်မှ သီးခြားတွက်ချက်ပေးပါမယ်။
-            </div>
-          </div>
-        )}
-
-        {/* PAGE 6: BOOK DETAIL */}
-        {page === 'bookDetail' && (
-          <div>
-            <div className="book-detail-back">
-              <button
-                type="button"
-                className="ghost-btn"
-                onClick={() => setPage('books')}
-              >
-                ← စာအုပ်များသို့ ပြန်သွားရန်
-              </button>
-            </div>
-            <div className="page-heading">
-              <div className="eyebrow">စာအုပ်အကြောင်း · BOOK DETAILS</div>
-              <h1 className="title">{selectedBook.name}</h1>
-              <p className="subtitle">{selectedBook.english}</p>
-            </div>
-
-            <section className="book-detail-hero">
-              <div className="book-pic">
-                {selectedBook.imageUrl ? (
-                  <div className="book-art">
-                    <img src={selectedBook.imageUrl} alt={selectedBook.name} />
-                  </div>
-                ) : (
-                  <div className="book-art no-photo">
-                    <div className="book-photo-hint">
-                      <span>📚</span>
-                      <strong>စာအုပ်မျက်နှာဖုံးပုံ ထည့်ရန်</strong>
-                      <small>practical-thai-book.webp</small>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <h2>{selectedBook.name}</h2>
-              <div className="subtitle" style={{ margin: '0 2px' }}>
-                {selectedBook.summary}
-              </div>
-              <div className="book-price-bar">
-                <span className="strike">{mmk(selectedBook.price[0])}</span>
-                <strong className="price">{mmk(selectedBook.promo[0]!)}</strong>
-                <span className="pill orange">အထူး Promotion</span>
-              </div>
-              <button
-                className="main-btn"
-                type="button"
-                style={{ width: '100%', minHeight: '44px' }}
-                onClick={() => handleOpenBookCheckout(selectedBook.id)}
-              >
-                ဝယ်ယူမည် →
-              </button>
-            </section>
-
-            <div className="section">
-              <h2>ဒီစာအုပ်အကြောင်း</h2>
-            </div>
-            <div className="tmm-panel book-detail-points">
-              {selectedBook.features.map((feature, i) => (
-                <div key={i} className="point">
-                  <span>✓</span>
-                  <span>{feature}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="section">
-              <h2>သင်ခန်းစာ ({selectedBook.chapters.length}) ခန်း</h2>
-            </div>
-            <div className="book-lesson-grid">
-              {selectedBook.chapters.map((ch, i) => (
-                <span key={i}>
-                  <b>{String(i + 1).padStart(2, '0')}.</b> {ch}
-                </span>
-              ))}
-            </div>
-
-            <div className="notice" style={{ marginTop: '15px' }}>
-              📦 စာအုပ်ဖိုးကို အရင်ပေးချေပြီး Delivery Fee ကို Admin တွက်ချက်ပြီးနောက် သီးခြားပေးချေရပါမယ်။
-              Promotion သက်တမ်းကို Admin ထံ အတည်ပြုရန် လိုအပ်ပါတယ်။
-            </div>
-
-            <button
-              className="main-btn"
-              type="button"
-              style={{ width: '100%', marginTop: '16px' }}
-              onClick={() => handleOpenBookCheckout(selectedBook.id)}
-            >
-              ဝယ်ယူမည် — {mmk(selectedBook.promo[0]!)}
-            </button>
           </div>
         )}
 
@@ -2698,18 +2454,6 @@ export default function App() {
         </button>
 
         <button
-          className={`nav-item ${page === 'books' || page === 'bookDetail' ? 'active' : ''}`}
-          type="button"
-          onClick={() => setPage('books')}
-          aria-label="စာအုပ်"
-        >
-          <svg className="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M4 8h16l-1 13H5L4 8zM9 8V6a3 3 0 0 1 6 0v2" />
-          </svg>
-          <span>စာအုပ်</span>
-        </button>
-
-        <button
           className={`nav-item ${page === 'free' ? 'active' : ''}`}
           type="button"
           onClick={() => setPage('free')}
@@ -2756,8 +2500,6 @@ export default function App() {
             aria-label={
               activeSheet === 'enroll'
                 ? 'သင်တန်းအပ်နှံရန် Dialog'
-                : activeSheet === 'bookBuy'
-                ? 'စာအုပ်ဝယ်ယူရန် Dialog'
                 : activeSheet === 'profile'
                 ? 'ကိုယ်ရေးအချက်အလက် ပြင်ရန် Dialog'
                 : activeSheet === 'docPreview'
@@ -2935,8 +2677,10 @@ export default function App() {
                 <div className="book-addon">
                   <div className="book-addon-title">📚 သင်တန်းအပ်ရင်း စာအုပ်ပါ ဝယ်မလား?</div>
                   <p className="hint" style={{ margin: '4px 0 0' }}>
-                    လက်တွေ့အသုံးချ ထိုင်းဘာသာစကားစာအုပ် · <s>{mmk(books[0].price[0])}</s>{' '}
-                    <strong className="book-addon-price">{mmk(books[0].promo[0]!)}</strong>
+                    {getBookAddLabel(selectedCourse, levelKeyFromLabel(checkoutLevel))} ·{' '}
+                    <strong className="book-addon-price">
+                      {mmk(getBookAddPrice(selectedCourse, levelKeyFromLabel(checkoutLevel)))}
+                    </strong>
                   </p>
                   <div className="choice-row">
                     <button
@@ -3006,7 +2750,9 @@ export default function App() {
                       </div>
                       {bookAddPrice > 0 && (
                         <div>
-                          <span>စာအုပ် (Promotion)</span>
+                          <span>
+                            စာအုပ် ({getBookAddLabel(selectedCourse, levelKeyFromLabel(checkoutLevel))})
+                          </span>
                           <strong>+ {mmk(bookAddPrice)}</strong>
                         </div>
                       )}
@@ -3199,296 +2945,6 @@ export default function App() {
                     'Admin ဆက်သွယ်ရန် Order တင်မည် · ' + mmk(calculateTotals().total)
                   ) : (
                     'Order အတည်ပြုမည် · ' + mmk(calculateTotals().total)
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* SHEET: BOOK BUY */}
-            {activeSheet === 'bookBuy' && (
-              <div>
-                <div className="sheet-head">
-                  <h2>စာအုပ်ဝယ်ယူရန်</h2>
-                  <button
-                    type="button"
-                    className="sheet-x"
-                    onClick={() => setActiveSheet('none')}
-                    aria-label="Close"
-                  >
-                    ×
-                  </button>
-                </div>
-                <p className="subtitle">{selectedBook.name} · Buy Now Checkout</p>
-
-                {/* Customer Name */}
-                <div className="field">
-                  <label htmlFor="bookCustomerName">
-                    👤 ဝယ်ယူသူ အမည် <span style={{ color: '#bd3b45' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="bookCustomerName"
-                    placeholder="သင့်အမည် အပြည့်အစုံ ရိုက်ထည့်ပါ"
-                    value={bookCustomerName}
-                    onChange={(e) => setBookCustomerName(e.target.value)}
-                  />
-                </div>
-
-                <div className="field">
-                  <label>စာအုပ်ပို့ရန် နိုင်ငံ</label>
-                  <div className="choice-row">
-                    <button
-                      type="button"
-                      className={delivery === 'Myanmar' ? 'selected' : ''}
-                      onClick={() => setDelivery('Myanmar')}
-                    >
-                      🇲🇲 Myanmar
-                    </button>
-                    <button
-                      type="button"
-                      className={delivery === 'Thailand' ? 'selected' : ''}
-                      onClick={() => setDelivery('Thailand')}
-                    >
-                      🇹🇭 Thailand
-                    </button>
-                  </div>
-                  <small>Delivery Fee ကို Admin က နောက်မှတွက်ပြီး သီးခြားတောင်းခံပါမယ်။</small>
-                </div>
-
-                {/* Delivery Address */}
-                <div className="field">
-                  <label htmlFor="bookDeliveryAddress">
-                    🏠 ပို့ဆောင်ပေးရမည့် လိပ်စာအပြည့်အစုံ <span style={{ color: '#bd3b45' }}>*</span>
-                  </label>
-                  <textarea
-                    id="bookDeliveryAddress"
-                    rows={2}
-                    placeholder="အိမ်အမှတ်၊ လမ်း၊ ရပ်ကွက်၊ မြို့နယ်၊ တိုင်း/ပြည်နယ် (သို့) ထိုင်းလိပ်စာ"
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                  />
-                  <small>စာအုပ်ပို့ဆောင်ရန်အတွက် လိပ်စာအပြည့်အစုံ ရိုက်ထည့်ပေးပါ။</small>
-                </div>
-
-                <div className="field">
-                  <label htmlFor="customerPhoneBook">
-                    📞 Customer ဆက်သွယ်ရန် ဖုန်းနံပါတ် <span style={{ color: '#bd3b45' }}>*</span>
-                  </label>
-                  <div className="phone-control">
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      id="customerPhoneBook"
-                      placeholder="ဥပမာ 09xxxxxxxxx / +66..."
-                      value={customerPhone}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setCustomerPhone(val);
-                        const digits = val.replace(/\D/g, '');
-                        setPhoneSaved(digits.length >= 8 && digits.length <= 15);
-                      }}
-                    />
-                    <button
-                      className="outline-btn"
-                      type="button"
-                      onClick={() => {
-                        if (!validCustomerPhone) {
-                          notify('ဆက်သွယ်ရန်ဖုန်းနံပါတ် ၈ လုံးမှ ၁၅ လုံးအတွင်း မှန်ကန်စွာ ထည့်ပါ။');
-                          return;
-                        }
-                        setPhoneSaved(true);
-                        notify('ဖုန်းနံပါတ် အတည်ပြုပြီးပါပြီ။');
-                      }}
-                    >
-                      အတည်ပြုရန်
-                    </button>
-                  </div>
-                  <small>Admin ဘက်မှ ဒီဖုန်းနံပါတ်ကို ပြန်လည်ဆက်သွယ်ပေးပါမယ်။</small>
-                  {(phoneSaved || validCustomerPhone) && <span className="pill green">✓ ဖုန်းနံပါတ် ထည့်ပြီးပါပြီ</span>}
-                </div>
-
-                <div className="sum">
-                  <div>
-                    <span>စာအုပ်ဖိုး (Promotion)</span>
-                    <strong>{mmk(selectedBook.promo[0]!)}</strong>
-                  </div>
-                  <div className="total">
-                    <span>{isCash ? 'Admin ဆက်သွယ်ပြီး သွင်းရန်' : 'ကျသင့်ငွေ'}</span>
-                    <span>{mmk(selectedBook.promo[0]!)}</span>
-                  </div>
-                </div>
-
-                <div className="field">
-                  <label>Payment Method</label>
-                  <div className="choice-row">
-                    {(['KBZPay', 'WavePay', 'Cash on Delivery'] as PaymentMethod[]).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        className={payment === m ? 'selected' : ''}
-                        onClick={() => {
-                          setPayment(m);
-                          if (m === 'Cash on Delivery') {
-                            setReceiptFile(null);
-                            setReceiptName('');
-                          }
-                        }}
-                      >
-                        {m === 'Cash on Delivery' ? 'Cash on Delivery (Admin ဆက်သွယ်မည်)' : m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {isWallet && (
-                  <div className="payment-account">
-                    <div>{payment} ငွေလက်ခံဖုန်းနံပါတ်</div>
-                    <strong>09-971806681</strong>
-                    <div className="only-number">ဒီဖုန်းနံပါတ်တစ်ခုတည်းနှင့်သာ ငွေလက်ခံပါသည်။</div>
-                  </div>
-                )}
-
-                {/* NEW REQUIRED FIELD: သင်တန်းအပ်သူ အမည် */}
-                <div className="field" style={{ marginTop: '12px' }}>
-                  <label htmlFor="enrollerNameBook">
-                    သင်တန်းအပ်သူ အမည် <span style={{ color: '#bd3b45' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="enrollerNameBook"
-                    required
-                    placeholder="သင်တန်းအပ်နှံသူ / ငွေလွှဲသူ အမည် ထည့်ရန်"
-                    value={enrollerName}
-                    onChange={(e) => setEnrollerName(e.target.value)}
-                  />
-                  <small>သင်တန်းအပ်နှံသူ သို့မဟုတ် ငွေလွှဲသူ၏ အမည်အပြည့်အစုံ ထည့်ပေးပါ။</small>
-                </div>
-
-                {isCash ? (
-                  <div className="callout-cash">
-                    📞 စာအုပ်ဖိုး ပေးချေခြင်းနှင့် ပို့ဆောင်မှုအစီအစဉ်ကို Admin က ဆက်သွယ်အတည်ပြုပါမယ်။ ဒီနည်းလမ်းရွေးရင် Screenshot မလိုပါ။
-                  </div>
-                ) : (
-                  <div className="field">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label htmlFor="receiptFileBook" style={{ marginBottom: 0 }}>
-                        Payment Screenshot <span style={{ color: '#bd3b45' }}>*</span>
-                      </label>
-                      <button
-                        type="button"
-                        className="ghost-btn"
-                        style={{ fontSize: '11px', padding: '2px 7px', color: '#6336d4' }}
-                        onClick={() => {
-                          setDriveSettingUrl(persist.driveUploadUrl || ENV_DRIVE_UPLOAD_URL);
-                          setDriveSettingFolder(persist.driveFolderId || ENV_DRIVE_FOLDER_ID);
-                          setActiveSheet('driveConfig');
-                        }}
-                      >
-                        ⚙️ Drive Setup
-                      </button>
-                    </div>
-                    <input
-                      type="file"
-                      id="receiptFileBook"
-                      accept="image/png,image/jpeg,image/webp"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        handleReceiptFileChange(file);
-                      }}
-                    />
-                    <small>
-                      KPay / Wave ဖြင့် ငွေလွှဲပြီးပါက Screenshot ထည့်ပါ။ (Google Drive သို့ တိုက်ရိုက် Upload လုပ်ပါမည်)
-                    </small>
-
-                    {receiptPreviewUrl && (
-                      <div className="receipt-preview-box">
-                        <img
-                          src={receiptPreviewUrl}
-                          alt="Slip Preview"
-                          className="receipt-preview-img"
-                        />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <strong style={{ fontSize: '12px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {receiptName}
-                          </strong>
-                          <span className="pill green" style={{ marginTop: '2px', display: 'inline-block' }}>
-                            ✓ အဆင်သင့်ဖြစ်ပါပြီ
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="ghost-btn"
-                          style={{ fontSize: '11.5px', color: '#bd3b45', padding: '3px 6px' }}
-                          onClick={() => {
-                            setReceiptFile(null);
-                            setReceiptName('');
-                            setReceiptBase64('');
-                            setReceiptPreviewUrl('');
-                          }}
-                        >
-                          ✕ ပြောင်းမည်
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Hide orange notice box when Cash on Delivery is selected */}
-                {!isCash && (
-                  <div className="demo-guard">
-                    🧪 <strong>Order &amp; Drive Upload</strong> — အတည်ပြုခလုတ်နှိပ်ပါက စလစ်ပုံကို Google Drive သို့
-                    ပေးပို့ပြီး Order Voucher နှင့် စာရွက်စာတမ်းကို အလိုအလျောက် ထုတ်ပေးပါမည်။
-                  </div>
-                )}
-
-                {/* Validation Feedback Warning right above button */}
-                {bookMissingFields.length > 0 && (
-                  <div
-                    role="alert"
-                    aria-live="polite"
-                    style={{
-                      backgroundColor: '#fef2f2',
-                      border: '1px solid #fecaca',
-                      borderRadius: '10px',
-                      padding: '10px 14px',
-                      marginTop: '12px',
-                      marginBottom: '4px',
-                      fontSize: '12.5px',
-                      color: '#991b1b',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '8px',
-                      lineHeight: '1.45',
-                    }}
-                  >
-                    <span style={{ fontSize: '15px', lineHeight: 1 }} aria-hidden="true">⚠️</span>
-                    <div>
-                      <strong style={{ display: 'block', marginBottom: '2px', color: '#7f1d1d' }}>
-                        Order တင်ရန် အောက်ပါအချက်အလက်များ လိုအပ်နေပါသည်:
-                      </strong>
-                      <span style={{ color: '#b91c1c' }}>
-                        {bookMissingFields.join(' · ')}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  className="main-btn"
-                  style={{ width: '100%', marginTop: '12px' }}
-                  disabled={bookMissingFields.length > 0 || isSubmitting}
-                  onClick={handleSubmitOrder}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <span className="spinner" aria-hidden="true"></span>
-                      <span>{uploadStatusText || 'Order တင်နေပါသည်...'}</span>
-                    </>
-                  ) : isCash ? (
-                    'Admin ဆက်သွယ်ရန် Order တင်မည် · ' + mmk(selectedBook.promo[0]!)
-                  ) : (
-                    'Order အတည်ပြုမည် · ' + mmk(selectedBook.promo[0]!)
                   )}
                 </button>
               </div>

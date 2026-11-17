@@ -11,6 +11,10 @@
  *   combined. Single-level prices (Level 1 / Level 2 only, live modes only)
  *   come from `courses.prices[mode].levels` in the same jsonb;
  *   `course_catalog` stays Level 1 + 2 only (one row per mode, as the admin reads it).
+ * - Book add-on prices: per course + level, from
+ *   `courses.prices.book_prices` (`{L1, L2}`); Level 1 + 2 = both books.
+ *   The standalone Practical Thai book (150,000 / 75,000) is priced
+ *   separately from `course_catalog` mode 'delivery' and is untouched.
  * - Images: per-mode posters from `course_images` / `course_catalog`
  *   (`<COURSE_CODE>:<mode>`, e.g. `TLS:yangon`), and course-level covers
  *   from `courses.image_url`.
@@ -131,6 +135,18 @@ export async function fetchCatalog(client: SupabaseClient): Promise<CatalogResul
       }
     }
     if (Object.keys(levelPrices).length > 0) merged.levelPrices = levelPrices;
+    // Per-level book add-on prices from courses.prices.book_prices
+    // (top-level key in the same jsonb, next to the mode keys). Level 1 + 2
+    // = both books together. Absent = keep the data.ts fallback.
+    const bookPrices = row?.prices?.book_prices;
+    if (bookPrices && typeof bookPrices === 'object') {
+      const parsed: Partial<Record<'L1' | 'L2', number>> = {};
+      for (const key of ['L1', 'L2'] as const) {
+        const v = Number(bookPrices[key]);
+        if (Number.isFinite(v) && v > 0) parsed[key] = v;
+      }
+      if (parsed.L1 || parsed.L2) merged.bookPrices = parsed;
+    }
     return merged;
   });
 

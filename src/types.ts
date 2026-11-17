@@ -3,8 +3,6 @@ export type Page =
   | 'courses'
   | 'tmm'
   | 'tls'
-  | 'books'
-  | 'bookDetail'
   | 'free'
   | 'account'
   | 'orders'
@@ -48,6 +46,13 @@ export interface Course {
    * absent = fall back to the Level 1 + 2 price.
    */
   levelPrices?: Partial<Record<ClassStyle, Partial<Record<'L1' | 'L2', LevelPrice>>>>;
+  /**
+   * Per-level book add-on prices (MMK) for this course: the price of the
+   * Level 1 book and the Level 2 book. Level 1 + 2 = both books together.
+   * Admin-set from Supabase `courses.prices.book_prices` (see catalog.ts);
+   * absent = fall back to the Practical Thai book's promotion price.
+   */
+  bookPrices?: Partial<Record<'L1' | 'L2', number>>;
 }
 
 export interface Book {
