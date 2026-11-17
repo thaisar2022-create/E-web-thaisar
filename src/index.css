@@ -485,6 +485,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   z-index: 0;
 }
 
+/* Detail-page course cover hero (Supabase); shown only when a cover URL is set. */
+.cover.detail-hero {
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  margin-bottom: 14px;
+}
+
 .cover .thai {
   position: relative;
   z-index: 1;

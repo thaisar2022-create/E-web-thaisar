@@ -1493,6 +1493,13 @@ export default function App() {
               <p className="subtitle">Thai Speaking Only · Beginner · Level 1 + 2 တွဲလျက်</p>
             </div>
 
+            {/* Course cover hero (Admin-set image from Supabase; hidden when unset). */}
+            {courses[0].imageUrl ? (
+              <div className={`cover ${courses[0].cover} detail-hero`}>
+                <img className="cover-img" src={courses[0].imageUrl} alt="TMM" />
+              </div>
+            ) : null}
+
             {/* ENROLLMENT & REGISTRATION BOX (AT THE VERY TOP) */}
             <div id="enrollment-section" className="enroll-box">
               <div className="section" style={{ marginTop: '8px' }}>
@@ -1678,6 +1685,13 @@ export default function App() {
               <h1 className="title">Thai Language Special (TLS)</h1>
               <p className="subtitle">အရေး၊ အဖတ်၊ အပြော၊ နားထောင် (4 Skills) + Grammar</p>
             </div>
+
+            {/* Course cover hero (Admin-set image from Supabase; hidden when unset). */}
+            {courses[1].imageUrl ? (
+              <div className={`cover ${courses[1].cover} detail-hero`}>
+                <img className="cover-img" src={courses[1].imageUrl} alt="TLS" />
+              </div>
+            ) : null}
 
             {/* ENROLLMENT & REGISTRATION BOX (AT THE VERY TOP) */}
             <div id="enrollment-section" className="enroll-box">
