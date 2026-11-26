@@ -811,7 +811,7 @@ export default function App() {
           const clientId = getOrCreateClientId();
 
           // Insert new order into public.orders
-          await supabase.from('orders').insert({
+          const { error: orderInsertErr } = await supabase.from('orders').insert({
             id: orderId,
             client_id: clientId,
             kind: 'course',
@@ -835,9 +835,12 @@ export default function App() {
             document_id: newDocId,
             slip_url: supabaseSlipUrl || null,
           });
+          if (orderInsertErr) {
+            throw new Error(`အော်ဒါ Supabase သို့ မရောက်ပါ (${orderInsertErr.message})။ ပြန်လည်ကြိုးစားပါ။`);
+          }
 
           // Insert generated receipt voucher into public.documents
-          await supabase.from('documents').insert({
+          const { error: docInsertErr } = await supabase.from('documents').insert({
             id: newDocId,
             client_id: clientId,
             title: generatedDoc.title,
@@ -855,8 +858,14 @@ export default function App() {
             pages_count: 1,
             content_preview: generatedDoc.contentPreview || [],
           });
+          if (docInsertErr) {
+            console.warn('Supabase documents insert notice:', docInsertErr.message);
+          }
         } catch (dbInsertErr) {
+          // An order that fails to reach Supabase must NOT look successful:
+          // rethrow so the outer handler shows the error instead of the success modal.
           console.warn('Supabase insert notice:', dbInsertErr);
+          throw dbInsertErr;
         }
       }
 
